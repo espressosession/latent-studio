@@ -466,33 +466,52 @@ APP_PIP_INSTALL = (
     + DROP_TORCHAO
 )
 
-# Pre-fetch every model BEFORE the app runs, retrying past the Hub's flaky CDN.
+# Pre-fetch every model before the app runs, retrying past the Hub's flaky CDN — but
+# opt-in (RUN_PREFLIGHT defaults to False), not automatic.
 #
-# Why this exists: since 2026-07-13 the Hub's Xet CDN intermittently rejects its own
-# presigned URLs (403 "Auth failed: SignatureError: invalid key pair id" — see
+# Why it exists at all: since 2026-07-13 the Hub's Xet CDN has intermittently rejected
+# its own presigned URLs (403 "Auth failed: SignatureError: invalid key pair id" — see
 # huggingface/datasets#8328). It hits public and private repos alike, with and without a
-# token, and it is *intermittent*: the same file can fail and then succeed a minute later.
-# There is nothing to fix on our side.
+# token, and it is *intermittent*: the same file can fail and then succeed a minute
+# later. As of the last check (2026-07-15), still open — an upstream comment that same
+# day reported it recurring after an earlier "seems to work again". There is nothing to
+# fix on our side, and no way to know from here whether it's live on any given run.
 #
-# What saves us is that the Hub cache RESUMES. A failed attempt still keeps every file it
-# already got, so a retry loop converges even when half the requests fail. This only works
-# with Xet disabled (see HF_SETUP): the Xet client *hangs* on the broken CDN instead of
-# raising, and you cannot retry a hang.
+# Why it's opt-in rather than automatic: the app already has its own "Preload all
+# models" button doing the same job on demand, so this cell is redundant on a happy
+# path — and it costs something real to run automatically every time: every checkpoint
+# and every style gets downloaded whether or not this session ever uses it (cache
+# space, bandwidth, minutes), and it replaces the app's own lazy-loading animations
+# (the whole point of a live demo) with a wall of preflight logs before you ever see
+# the UI. Flip RUN_PREFLIGHT to True below and re-run this cell if a Generate click
+# hits repeated download errors — the retry loop and its reasoning are unchanged,
+# just no longer mandatory.
 #
-# Doing this here rather than lazily inside the app also puts a multi-GB download somewhere
-# it can be watched and repeated, instead of inside a UI worker thread. LoRAs are staged
-# into app_loras/, which pipeline_manager.set_lora already prefers over a repo id — so once
-# this cell is done, styles load with no network at all.
+# What saves us when it IS needed: the Hub cache RESUMES. A failed attempt still keeps
+# every file it already got, so a retry loop converges even when half the requests
+# fail. This only works with Xet disabled (see HF_SETUP): the Xet client *hangs* on the
+# broken CDN instead of raising, and you cannot retry a hang.
+#
+# Doing this here rather than lazily inside the app also puts a multi-GB download
+# somewhere it can be watched and repeated, instead of inside a UI worker thread. LoRAs
+# are staged into app_loras/, which pipeline_manager.set_lora already prefers over a
+# repo id — so once this cell has actually run, styles load with no network at all.
 PREFLIGHT_MARKDOWN = (
-    "## Download the models (run this before generating)\n"
-    "Pulls every checkpoint and style **now**, so the first Generate is instant and a "
-    "multi-GB download never happens inside the app's worker thread.\n\n"
-    "It also retries. Since **2026-07-13** the Hub's CDN intermittently rejects its own "
-    "signed download links (`403 … SignatureError: invalid key pair id`, "
+    "## Download the models (optional — off by default)\n"
+    "The app already downloads each model itself the first time you select it, with its "
+    "own loading animation, and has a **\"Preload all models\"** button in its Setup tab "
+    "for the same one-shot warm-up this cell does. Leaving `RUN_PREFLIGHT` at `False` "
+    "skips this cell and relies on that — faster to reach the UI, and no cache space "
+    "spent on a checkpoint or style this session never uses.\n\n"
+    "Turn it on if a Generate click hits repeated download errors. Since "
+    "**2026-07-13** the Hub's CDN has intermittently rejected its own signed download "
+    "links (`403 … SignatureError: invalid key pair id`, "
     "[huggingface/datasets#8328](https://github.com/huggingface/datasets/issues/8328)) — "
-    "a Hugging Face outage, unrelated to this project, that hits public repos too. The "
-    "cache **resumes**, so retrying works its way through: each attempt keeps whatever it "
-    "already downloaded. If a run dies anyway, just run this cell again — nothing is lost.\n\n"
+    "a Hugging Face outage, unrelated to this project, that hits public repos too and is "
+    "still open as of the last check. This cell's retry loop pulls every checkpoint and "
+    "style **now** and works its way through the flakiness: the cache **resumes**, so "
+    "each attempt keeps whatever it already downloaded even if most of them fail. If a "
+    "run dies anyway, just run the cell again — nothing is lost.\n\n"
     "The styles are copied into `app_loras/`, which the pipeline prefers over the Hub, so "
     "after this cell they load with no network at all."
 )
@@ -520,7 +539,7 @@ HUB_RETRY = (
     "            time.sleep(3)\n"
 )
 
-PREFLIGHT = (
+_PREFLIGHT_BODY = (
     HUB_RETRY
     + "\n"
     "import os\n"
@@ -560,6 +579,34 @@ PREFLIGHT = (
     '    shutil.copy(weights, os.path.join(APP_LORAS_DIR, f"{lora.id}-lora.safetensors"))\n'
     "\n"
     'print("\\nAll models cached. The app will load them from disk.")'
+)
+
+
+def _indent(code: str, spaces: int = 4) -> str:
+    """Reindent a whole source block by a fixed amount — safer than hand-indenting a
+    multi-line string literal (blank lines stay blank; nested indentation is preserved
+    exactly since every line shifts by the same amount)."""
+    pad = " " * spaces
+    return "\n".join(pad + line if line else "" for line in code.split("\n"))
+
+
+# The cell still runs top-to-bottom on a fresh runtime either way (the notebook must,
+# per the brief) — RUN_PREFLIGHT just decides whether its body does anything. A Colab
+# form field (the `# @param` comment), not a plain constant, so switching it on is a
+# checkbox in the rendered cell, not an edit.
+PREFLIGHT = (
+    'RUN_PREFLIGHT = False  # @param {type:"boolean"}\n'
+    "\n"
+    "if RUN_PREFLIGHT:\n"
+    + _indent(_PREFLIGHT_BODY)
+    + "\n"
+    "else:\n"
+    '    print(\n'
+    '        "Skipped — the app downloads each model itself on first use (with its own "\n'
+    '        "loading animation), or use its \'Preload all models\' button. Tick "\n'
+    '        "RUN_PREFLIGHT above and re-run this cell if a Generate click hits repeated "\n'
+    '        "download errors."\n'
+    "    )"
 )
 
 # The training notebook downloads from the same Hub, so it hits the same CDN outage —
