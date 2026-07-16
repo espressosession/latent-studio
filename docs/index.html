@@ -185,7 +185,7 @@
 </p>
 <ol class="steps">
   <li><strong>Download</strong> — public-domain (CC0) artworks from the Art Institute of Chicago Open Access API.</li>
-  <li><strong>Preprocess</strong> — trim frame/mount borders, center-crop to 512², drop outliers.</li>
+  <li><strong>Preprocess</strong> — trim frame/mount borders, centre-crop to 512², drop outliers.</li>
   <li><strong>Caption</strong> — BLIP-large content captions, with medium/style words stripped out.</li>
   <li><strong>Train</strong> — a LoRA on the SD&nbsp;1.5 UNet (diffusers' training script), for a number of
     steps that scales with the size of the dataset.</li>
@@ -622,7 +622,7 @@
   SD&nbsp;1.5's training data, unrelated to anything in the prompt. And at the opposite corner, <strong>CFG&nbsp;15, 4
   steps</strong>, "oversaturated" undersells it: the whole frame carries a faint moiré texture, a green halo sits
   around the traveller, and a pale, textureless patch floats top-right with no source in the scene — CFG and step
-  count compounding into genuine artifacts, not just hot colour.
+  count compounding into genuine artefacts, not just hot colour.
 </p>
 <p>
   One more thing worth naming, because it's a finding about reproducibility itself, not about this image: an
@@ -726,7 +726,7 @@
   picked up a conical hat and a red robe — Hokusai's print-medium signature surfacing inside a checkpoint
   that, at 1.0, showed none of it. It's a partial convergence, not a full one: the foliage stays
   DreamShaper's own dense, painterly mass rather than flattening into Hokusai's woodblock fields. This is
-  the concrete shape of the in-line warning that "above ~1.2 it usually burns" — not a color blow-out like
+  the concrete shape of the in-line warning that "above ~1.2 it usually burns" — not a colour blow-out like
   high CFG, but the two style priors visibly fighting over different parts of the same frame.
 </p>
 <p>
