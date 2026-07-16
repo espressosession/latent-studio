@@ -13,7 +13,7 @@ import gradio as gr
 
 from .design_tokens import HEIGHT, SWEEP_SPECS, WIDTH
 from .metadata import save_with_metadata
-from .registry import DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID
+from .registry import CHECKPOINTS, DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID, LORAS
 
 # (metadata key, human label) — the order they are shown in.
 SETTINGS_ROWS = [
@@ -150,9 +150,25 @@ def metadata_to_control_values(metadata) -> tuple:
     scales = first.get("controlnet_scales", {}) or {}
     cn_select = types[0] if types else "off"
 
+    # Registry ids, not just missing keys: a file can name a checkpoint/style that
+    # existed when it was exported but has since been retired from the roster (e.g. a
+    # LoRA cut from the ship list) — gr.Radio validates a restored value against its
+    # *current* choices and crashes with an uncaught popup otherwise, same failure mode
+    # the sweep-bounds fix above addresses for Compare. Fall back to the default instead.
+    checkpoint_id = first.get("checkpoint_id", DEFAULT_CHECKPOINT_ID)
+    if checkpoint_id not in {cp.id for cp in CHECKPOINTS}:
+        checkpoint_id = DEFAULT_CHECKPOINT_ID
+    lora_id = first.get("lora_id", DEFAULT_LORA_ID)
+    if lora_id not in {lora.id for lora in LORAS}:
+        lora_id = DEFAULT_LORA_ID
+
     compare = _compare_spec(metadata)
     if compare:
         field1, field2 = compare.get("field1", "off"), compare.get("field2", "off")
+        if field1 != "off" and field1 not in SWEEP_SPECS:
+            field1 = "off"
+        if field2 != "off" and field2 not in SWEEP_SPECS:
+            field2 = "off"
 
         def _u(value):
             return gr.update(value=value) if value is not None else gr.update()
@@ -177,8 +193,8 @@ def metadata_to_control_values(metadata) -> tuple:
         suppress1 = suppress2 = False
 
     return (
-        first.get("checkpoint_id", DEFAULT_CHECKPOINT_ID),
-        first.get("lora_id", DEFAULT_LORA_ID),
+        checkpoint_id,
+        lora_id,
         first.get("lora_weight", 1.0),
         first.get("prompt", ""),
         first.get("negative_prompt", ""),
@@ -192,6 +208,23 @@ def metadata_to_control_values(metadata) -> tuple:
         field2, from2_u, to2_u, count2_u,
         suppress1, suppress2,
     )
+
+
+def import_warnings(metadata) -> list[str]:
+    """Which of a restored file's checkpoint/style ids aren't in the current registry —
+    for Import's own status message only. metadata_to_control_values() already falls
+    back to a safe default for these regardless, so the app never crashes on an old
+    export whose checkpoint/style has since been retired (e.g. a cut LoRA); this just
+    lets the caller say so instead of silently substituting."""
+    first = _cells(metadata)[0] if _cells(metadata) else {}
+    warnings = []
+    checkpoint_id = first.get("checkpoint_id")
+    if checkpoint_id and checkpoint_id not in {cp.id for cp in CHECKPOINTS}:
+        warnings.append(f"checkpoint '{checkpoint_id}'")
+    lora_id = first.get("lora_id")
+    if lora_id and lora_id not in {lora.id for lora in LORAS}:
+        warnings.append(f"style '{lora_id}'")
+    return warnings
 
 
 def _slug(text: str, limit: int = 40) -> str:

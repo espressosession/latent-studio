@@ -29,6 +29,7 @@ from .metadata_view import (
     _cells,
     _prepare_download_files,
     history_to_gallery,
+    import_warnings,
     metadata_to_control_values,
     prompt_used_html,
     settings_html,
@@ -276,9 +277,15 @@ def on_import_settings(file):
     except Exception as exc:  # noqa: BLE001 — surfaced in the panel, never a popup
         return (*noop, status_html("alert", f"Couldn't read that file: {exc}"))
 
+    warnings = import_warnings(metadata)
+    message = (
+        f"Settings imported, but {' and '.join(warnings)} no longer exist — defaulted instead."
+        if warnings
+        else "Settings imported — press Generate to reproduce it."
+    )
     return (
         *metadata_to_control_values(metadata),
-        status_html("check", "Settings imported — press Generate to reproduce it."),
+        status_html("alert" if warnings else "check", message),
     )
 
 
