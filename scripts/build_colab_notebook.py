@@ -61,10 +61,10 @@ APP_MODULE_FILES = [
         "operation — it fully reloads and frees the old pipeline's memory first. "
         "Switching **which LoRA** is loaded is cheaper; changing only the LoRA "
         "**weight** (strength) is free — it's applied per-generation instead of "
-        "reloading anything. **Tweak:** set the `DISABLE_SAFETY_CHECKER` environment "
-        "variable before importing this module to skip the safety checker during "
-        "local debugging — never do this for the actual submission run, the safety "
-        "checker must stay on in the public-facing app.",
+        "reloading anything. **Tweak:** `DISABLE_SAFETY_CHECKER` is a local-only debug "
+        "escape hatch — set it before importing this module to skip the safety checker "
+        "while iterating offline. This notebook never sets it: the deployed app always "
+        "runs with the safety checker enabled.",
     ),
     (
         "controlnet.py",

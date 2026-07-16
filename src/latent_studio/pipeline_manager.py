@@ -16,8 +16,8 @@ from .registry import CHECKPOINTS, LORAS, get_checkpoint, get_lora
 
 StatusCallback = Callable[[str], None] | None
 
-# Dev-only local escape hatch. Never set for the Colab submission run or exposed
-# in the UI — the brief requires the safety checker enabled in the public app.
+# Dev-only local escape hatch, never wired into the UI. The deployed app always
+# runs with the safety checker enabled — a brief requirement for the public app.
 _SAFETY_CHECKER_DISABLED = bool(os.environ.get("DISABLE_SAFETY_CHECKER"))
 
 # Where training/export.py stages locally-trained LoRAs; preferred over the HF
