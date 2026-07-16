@@ -1,0 +1,17 @@
+{
+  "prompt": "a hand holding a bundle of wildflowers against a plain background",
+  "negative_prompt": "face",
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "steps": 30,
+  "seed": 1275550927,
+  "lora_weight": 1,
+  "checkpoint_id": "sd15-base",
+  "checkpoint_label": "Stable Diffusion 1.5",
+  "lora_id": "hiroshige",
+  "lora_label": "Utagawa Hiroshige",
+  "effective_prompt": "sks, a hand holding a bundle of wildflowers against a plain background",
+  "device": "cuda",
+  "dtype": "float16"
+}

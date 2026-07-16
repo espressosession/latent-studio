@@ -1,0 +1,17 @@
+{
+  "prompt": "a great wave breaking over small fishing boats, seen from the shore",
+  "negative_prompt": "blurry",
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "steps": 30,
+  "seed": 3080440566,
+  "lora_weight": 1,
+  "checkpoint_id": "sd15-base",
+  "checkpoint_label": "Stable Diffusion 1.5",
+  "lora_id": "hokusai",
+  "lora_label": "Katsushika Hokusai",
+  "effective_prompt": "sks, a great wave breaking over small fishing boats, seen from the shore",
+  "device": "cuda",
+  "dtype": "float16"
+}

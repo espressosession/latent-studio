@@ -1,0 +1,17 @@
+{
+  "prompt": "travellers resting under a large pine tree beside a dirt road",
+  "negative_prompt": "",
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "steps": 30,
+  "seed": 1848885812,
+  "lora_weight": 1,
+  "checkpoint_id": "sd15-base",
+  "checkpoint_label": "Stable Diffusion 1.5",
+  "lora_id": "turner",
+  "lora_label": "J.M.W. Turner",
+  "effective_prompt": "sks, travellers resting under a large pine tree beside a dirt road",
+  "device": "cuda",
+  "dtype": "float16"
+}

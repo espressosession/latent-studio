@@ -1,0 +1,851 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latent Studio</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #6b6b6b;
+    --border: #e2e2e2;
+    --accent: #5b4ee5;
+    --code-bg: #f4f4f5;
+    --callout-bg: #f7f6ff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121212;
+      --fg: #f0f0f0;
+      --muted: #a0a0a0;
+      --border: #2e2e2e;
+      --accent: #9d8fff;
+      --code-bg: #1e1e1e;
+      --callout-bg: #1a1830;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+  h1 { font-size: 2.1rem; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 1.1rem; color: var(--muted); margin: 0 0 1.25rem; }
+  h2 {
+    margin-top: 3rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { margin-top: 1.75rem; margin-bottom: 0.3rem; font-size: 1.05rem; }
+  .meta { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.25rem; }
+  .meta div { margin: 0.15rem 0; }
+  .links { font-size: 0.95rem; margin-bottom: 0.5rem; }
+  .links a { margin-right: 0.4rem; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+  .tags li {
+    font-size: 0.8rem; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 999px; padding: 0.15rem 0.7rem;
+  }
+  .placeholder {
+    color: var(--muted);
+    font-style: italic;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .callout {
+    background: var(--callout-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-top: 1rem;
+    font-size: 0.95rem;
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+  figure { margin: 0; }
+  figure img { width: 100%; border-radius: 8px; display: block; }
+  figcaption { font-size: 0.85rem; color: var(--muted); margin-top: 0.4rem; }
+  table { border-collapse: collapse; width: 100%; margin-top: 1rem; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  code { background: var(--code-bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
+  pre { background: var(--code-bg); padding: 0.9rem 1rem; border-radius: 8px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; }
+  a { color: var(--accent); }
+  .steps { padding-left: 1.1rem; }
+  .steps li { margin: 0.3rem 0; }
+  footer { margin-top: 4rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+
+<h1>Latent Studio</h1>
+<p class="subtitle">A Stable Diffusion 1.5 image studio for non-experts — with a fully automated artist&nbsp;&rarr;&nbsp;LoRA training pipeline.</p>
+
+<div class="meta">
+  <div>Raphael Mayer</div>
+  <div>Creative Coding Advanced — Summer Semester 2026, Faculty of Design, TH Nürnberg</div>
+  <div>Instructor: Moritz Schwind</div>
+</div>
+<div class="links">
+  <a href="https://github.com/espressosession/latent-studio">GitHub repository</a> ·
+  <a href="https://github.com/espressosession/latent-studio/blob/main/notebooks/latent_studio_colab.ipynb">App notebook (.ipynb)</a> ·
+  <a href="https://github.com/espressosession/latent-studio/blob/main/notebooks/lora_training_colab.ipynb">Training notebook (.ipynb)</a>
+</div>
+
+<ul class="tags">
+  <li>Stable Diffusion 1.5</li>
+  <li>diffusers</li>
+  <li>Gradio</li>
+  <li>LoRA</li>
+  <li>ControlNet (explored)</li>
+  <li>fp16 · 512²</li>
+</ul>
+
+<h2>Abstract</h2>
+<p>
+  <strong>Latent Studio</strong> is a web app built around a Stable Diffusion 1.5 pipeline and designed
+  for people who have never heard of "latent space". You pick a base model and an art style, type a
+  description, and generate an image — every control is named in plain language and then, next to it, gives
+  both its real technical name and what its scale actually does. Every image is <strong>fully
+  reproducible</strong>: its complete settings (model, style and strength, prompt, seed, guidance, steps)
+  are embedded in the PNG, and one click loads them back.
+</p>
+<p>
+  Six of the art styles are <strong>custom LoRAs</strong> — Katsushika&nbsp;Hokusai (ukiyo-e woodblock),
+  Utagawa&nbsp;Hiroshige (ukiyo-e landscape), J.&nbsp;M.&nbsp;W.&nbsp;Turner (atmospheric landscape),
+  Claude&nbsp;Monet (Impressionism), Albrecht&nbsp;Dürer (Renaissance engraving) and
+  Rembrandt&nbsp;van&nbsp;Rijn (etching) — produced not by
+  hand-curated datasets but by an <strong>automated pipeline</strong>: an artist name goes in, a validated,
+  published LoRA comes out. Once the pipeline was working, a new style cost about
+  <strong>8&nbsp;minutes of GPU time</strong>, which turned the interesting question from "can we train one?"
+  into "which artists does the data even allow?" — see the findings below.
+  On top of the core generator, the app offers systematic parameter/seed sweeps for exploration.
+  (ControlNet — the brief's optional advanced path — was built but kept secondary to the training
+  pipeline and is disabled in the shipped app; see <a href="#scope">Scope</a>.)
+</p>
+
+<h2>The app</h2>
+<p>The interface is deliberately built for non-experts; the design choices that follow all serve that goal.</p>
+<ul>
+  <li><strong>Base-model selector</strong> — SD&nbsp;1.5 base, DreamShaper&nbsp;8, epiCRealism. Switching
+    reloads the model with a visible loading state; exactly one pipeline is ever held in memory (the old one
+    is freed before the new one loads).</li>
+  <li><strong>Style (LoRA) selector + strength</strong> — the style's trigger word is applied
+    <em>automatically</em>, so users don't need to know that a hidden token invokes the style.</li>
+  <li><strong>Plain-language controls</strong> — "prompt strength" (CFG), "detail" (steps), "avoid"
+    (negative prompt). Each one names its real term and then explains its scale, rather than assuming
+    you already know what 7.5 means.</li>
+  <li><strong>Reproducible seeds</strong> — the seed is either rolled fresh on every click or pinned, and
+    the seed actually used is always reported back. Any image can be reproduced from its own embedded
+    metadata via "Reuse these settings".</li>
+  <li><strong>Two levels of interface</strong> — by default you see a prompt, a picture, and the exact
+    words that produced it. An <strong>Advanced</strong> switch reveals a third column with that image's
+    complete settings and the button that loads them back.</li>
+  <li><strong>Compare</strong> — instead of one image, generate a grid that walks a setting across a range
+    (prompt strength, detail, style strength or seed), optionally two settings at once for a table. Seeds
+    are just one of the comparable settings rather than a separate mode.</li>
+  <li><strong>Visible progress</strong> — a real bar with an ETA for the model download, for the denoising
+    steps, and for "image 7 of 25" while a grid is running.</li>
+</ul>
+
+<h2 id="scope">Scope: where the advanced work went</h2>
+<p>
+  The brief names an optional <strong>advanced</strong> path — ControlNet conditioning. This project put its
+  advanced ambition into the <strong>automated, measured LoRA training pipeline</strong> below instead.
+  Turning an artist's name into a public-domain-verified dataset, a captioned training run, and a LoRA that is
+  <em>scored against the artist's real work</em> before it is allowed to ship is where the interesting problems
+  — and every finding on this page — actually lived.
+</p>
+<p>
+  ControlNet <em>was</em> built and is functional: canny and depth conditioning, multi-ControlNet, and
+  combinable with a style LoRA (the reference fixes the composition, the LoRA paints it). In local testing
+  (Apple&nbsp;MPS) it runs cleanly — loading, single images and grids all generate. On the <strong>Colab demo
+  runtime</strong>, however, it raises errors that <strong>do not reproduce cleanly</strong>: different runs
+  fail differently (a meta-tensor load error, a dtype mismatch, a grid-time exception) and none of them
+  surface locally under the same library versions, which points at the runtime/session rather than the logic.
+  Since a demo that fails unpredictably is worse than one feature fewer, ControlNet is <strong>disabled in the
+  shipped app</strong>; the code stays in the repository, and re-enabling it is a post-submission task.
+</p>
+
+<h2>Automated LoRA training pipeline</h2>
+<p>
+  Every style in the app is produced by a self-contained Colab workflow (it is deliberately <em>not</em>
+  a live feature of the app). Give it an artist name and it runs, in order:
+</p>
+<ol class="steps">
+  <li><strong>Download</strong> — public-domain (CC0) artworks from the Art Institute of Chicago Open Access API.</li>
+  <li><strong>Preprocess</strong> — trim frame/mount borders, center-crop to 512², drop outliers.</li>
+  <li><strong>Caption</strong> — BLIP-large content captions, with medium/style words stripped out.</li>
+  <li><strong>Train</strong> — a LoRA on the SD&nbsp;1.5 UNet (diffusers' training script), for a number of
+    steps that scales with the size of the dataset.</li>
+  <li><strong>Validate</strong> — grids that expose overfitting and burn-in (see below).</li>
+  <li><strong>Score</strong> — measure the LoRA against the artist's <em>real artworks</em> (see below).</li>
+  <li><strong>Export &amp; publish</strong> — stage locally, then push to the Hugging Face Hub, from where the
+    app loads it — <em>but only if the score allows it</em>.</li>
+</ol>
+<div class="callout">
+  <strong>The review is a gate, not a formality.</strong> Publishing is the step that matters: the copy on the
+  Hub is what the app then loads. So the pipeline <strong>refuses to publish a LoRA that cannot show it
+  resembles the artist</strong> — the weights are staged locally instead, the contact sheet is displayed, and
+  the failure names its own fix (an over-trained LoRA needs an <em>earlier checkpoint</em>, not a retrain).
+  A human who has looked at the sheet can always override. "Trained automatically" must not be allowed to
+  mean "shipped unchecked".
+</div>
+
+<h2>Findings, difficulties &amp; experiences</h2>
+
+<h3>The Met API was a dead end; the Art Institute of Chicago was not</h3>
+<p>
+  The Metropolitan Museum API only offers full-text search, which matches anything that merely mentions an
+  artist — for Hokusai that left roughly two genuinely-his public-domain images. The Art Institute of
+  Chicago API instead filters on the actual artist field <em>and</em> a public-domain flag, yielding
+  hundreds of verified CC0 works per artist. Choosing the right data source was the single biggest
+  unblock.
+</p>
+
+<h3>A style LoRA is only as good as the style/content split</h3>
+<p>
+  A style LoRA generalises only if the <strong>trigger word owns the style</strong> and the
+  <strong>captions own the content</strong>. If captions are too sparse, the style bleeds into the training
+  subjects ("subject bleed": every output turns into a mountain or a wave). So we caption the content with
+  BLIP and then <em>strip medium/style words</em> ("painting", "engraving", "sepia") so those attributes
+  attach only to the trigger — and we deliberately draw a <strong>subject-diverse</strong> sample so the
+  style has varied content to attach to.
+</p>
+
+<h3>The weak-trigger trap</h3>
+<p>
+  Early on the style barely showed up unless the strength was pushed very high. Two causes: the trigger
+  word was often simply missing from the prompt, and — because we train the UNet only (text encoder
+  frozen) — a novel trigger token is inherently weaker. We fixed it from both sides: the app now
+  <strong>applies the trigger word invisibly</strong> at generation time (recorded in the metadata for
+  reproducibility), and the training side uses richer captions and more steps.
+</p>
+
+<h3>A trigger word can be too meaningful — and it is a separate control</h3>
+<p>
+  We first named the styles after the artists, with triggers like <code>sksHokusai</code> and
+  <code>sksTurner</code>. They worked, but a strength sweep exposed something off: at LoRA strength
+  <strong>0</strong> — where the adapter mathematically contributes nothing — the image was already
+  stylised and already differed from the no-LoRA baseline at the same seed. The cause was not the
+  adapter but the trigger: since the token still contains "Hokusai"/"Turner", the base model
+  <em>already</em> associates it with woodblock prints / atmospheric oils, so part of the "style" at
+  low strength came from Stable Diffusion's own prior via the prompt, not from anything we trained.
+</p>
+<p>
+  That clarified two controls we had been conflating: the <strong>trigger word</strong> decides whether
+  the concept is present in the prompt at all, while the <strong>adapter strength</strong> decides how
+  strongly the <em>trained</em> delta is applied on top. A name-like trigger rides the base model's
+  prior — it fires reliably but blurs attribution (you cannot separate "what the model already knew"
+  from "what the LoRA added"). A neutral, semantically-empty token has almost no prior, so strength 0
+  stays neutral and any style that appears is genuinely attributable to training.
+</p>
+<p>
+  So we switched all project LoRAs to a <strong>single shared neutral trigger, <code>sks</code></strong>.
+  Because the app only ever loads one LoRA at a time, one token is unambiguous — it resolves to whichever
+  style is active. This is exactly the "inherently weaker" novel token from the previous point, so we
+  lean on richer captions and more steps to make the <em>training</em> carry the style rather than the
+  prompt. The payoff is an honest strength sweep (visible in the LoRA-weight sweep below): strength 0
+  &asymp; the base model, and the ramp toward 1.0 shows the adapter's own contribution.
+</p>
+
+<h3>Automated data-quality checks</h3>
+<p>
+  Turner's source engravings are heavily <strong>sepia-tinted</strong>, and the LoRA inherits that cast.
+  Rather than discover this by eye, the preprocessing now computes a <strong>colour diagnostic</strong>
+  (overall colourfulness plus a "mono-ratio" measuring how uniformly the hue points one direction) and
+  flags a monochrome/tinted corpus automatically — which also lets us screen candidate artists by their
+  data <em>before</em> spending GPU time. A second check <strong>auto-trims the cream paper mount</strong>
+  around scanned prints (using a median + "light-mount" test) while leaving full-bleed paintings untouched.
+</p>
+
+<h3>Public-domain coverage — not compute — is the binding constraint</h3>
+<p>
+  Once a full training run cost about eight minutes, the obvious move was "train more artists". The limit
+  turned out not to be the GPU at all, but what is <em>legally usable</em>. The Art Institute's holdings and
+  its <em>public-domain</em> holdings are very different things: the museum has 33 works by
+  Käthe&nbsp;Kollwitz — and <strong>not one of them is public domain</strong> (she died in 1945, so her work
+  is still in copyright). The pipeline refused all 33, which is exactly right: the
+  <code>is_public_domain</code> filter is a licensing guard, not a convenience. Being able to see an image on
+  a museum website does not make it ours to train on.
+</p>
+<p>
+  Coverage also varies wildly between artists — roughly 2,600 usable public-domain images for
+  Toulouse-Lautrec and 2,300 for Hiroshige, but only 19 for Van&nbsp;Gogh and 6 for Rosa&nbsp;Bonheur. One
+  sobering side-effect: the public domain skews heavily male, so "assemble a diverse roster" is constrained
+  by what history actually left in the commons. Of the women we checked, only Mary&nbsp;Cassatt (~236) and
+  Julia&nbsp;Margaret&nbsp;Cameron (~196) had enough public-domain work to train on at all.
+</p>
+
+<h3>Training length has to scale with the dataset — and even then, data is the ceiling</h3>
+<p>
+  The LoRAs built from small datasets were clearly worse, and the first fix was a real one. Our training
+  length had been a <strong>fixed</strong> 2,400 steps, calibrated for a 60-image set — about 40 steps per
+  image. On a 19-image set that silently becomes <strong>126 steps per image</strong>, which burns the style
+  in; on a 150-image set it is a mere 16, which leaves it undertrained. So <strong>steps per image</strong>,
+  not total steps, is the meaningful knob, and training length now scales with the dataset
+  (<code>images&nbsp;×&nbsp;40</code>, floored and capped).
+</p>
+<p>
+  A second, self-inflicted loss compounded the scarcity: images were fetched at 843&nbsp;px, the border-trim
+  then removed the paper mount, and what remained often fell below the 384&nbsp;px minimum and was discarded.
+  Print-heavy artists suffered most — of Cassatt's ~236 usable public-domain works only 41 survived
+  preprocessing; fetching at double the resolution recovered some, but not enough to matter.
+</p>
+<p>
+  What neither fix could do was manufacture data that isn't there. Once the pipeline was correct we retrained
+  every style and compared before against after (the before/after study below) — and the clean result is that
+  <strong>below the 150-image target, no amount of step-tuning rescues the style</strong>. Scaling the
+  training length is necessary; a large, representative corpus is what actually decides whether a style holds.
+</p>
+
+<h3>"How do you know the LoRAs are any good?" — measuring style instead of asserting it</h3>
+<p>
+  Our validation compared each LoRA against the <em>base model</em>. It never once looked at the artist's
+  actual work — so the question that decides whether a style ships, <em>does this resemble the source
+  data?</em>, was still being answered by gut feeling. With several LoRAs trained half-attentively across an
+  evening, we could no longer say which runs had been good ones. A pipeline that trains automatically and
+  then judges by vibes has simply moved the unreliability somewhere less visible.
+</p>
+<p>
+  So the last step became a <strong>scorecard</strong>. Every number is a <em>difference</em> against the same
+  prompt and the same seed rendered <em>without</em> the LoRA: content is held constant, so whatever is left
+  over is the adapter's doing.
+</p>
+<ul>
+  <li><strong>Style gain</strong> — how much closer the generated image moves (in CLIP image-embedding space)
+    to the centroid of the artist's <em>real</em> artworks.</li>
+  <li><strong>Prompt drop</strong> — how much prompt-following is lost (CLIP text-image similarity). A large
+    drop is the signature of a LoRA that has memorised motifs and stopped listening.</li>
+  <li><strong>Burn-in</strong> — saturation relative to the baseline; a cooked style oversaturates.</li>
+</ul>
+<p>
+  The interesting part is <em>where</em> style gain is measured. Comparing a generated mountain landscape to a
+  corpus full of mountain landscapes proves nothing — the similarity could just be the shared subject. So the
+  style metric is computed <strong>only on deliberately modern prompts</strong>: a bicycle, a city street with
+  traffic lights, a plate of food. No public-domain corpus from before 1900 can contain those. If the output
+  still looks like the artist, that similarity <em>cannot</em> be a memorised training motif — it can only be
+  style. The same reasoning fixed our off-domain grid, whose original prompts ("a portrait", "a vase of
+  flowers") were quietly <em>on</em>-domain for Cassatt, Monet and Renoir and therefore proved nothing either.
+</p>
+<p>
+  The numbers rank the LoRAs; the <strong>contact sheet decides</strong> — the artist's real artworks in the
+  top row, our generations at each strength below, so the claim is always checkable by eye. And because the
+  scorecard accepts a Hugging Face repo id, it can grade <em>what is actually published</em>, not merely what
+  happens to be on the machine that trained it.
+</p>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/hokusai_scorecard.jpg" alt="Hokusai scorecard: real woodblock prints in the top row, then base SD 1.5, then the LoRA at strength 0.5 and 1.0, across five prompts">
+  <figcaption>
+    The Hokusai scorecard. <strong>Top row: real Hokusai prints</strong> from the training data. Below them the
+    same five prompts rendered by base SD&nbsp;1.5, then by the LoRA at strength 0.5 and 1.0. The three
+    right-hand columns are the modern prompts — <em>a city street with traffic lights, a plate of food, a
+    person on a bicycle</em>. Hokusai never drew any of them, and the base model renders them as photographs;
+    at strength&nbsp;1.0 they come back as woodblock prints. That is the proof that the adapter learned a
+    <em>style</em> and not a set of motifs, and it is what the <code>style&nbsp;+0.220</code> figure is measuring.
+    Prompt-following is intact (<code>+0.010</code>) and there is no burn-in
+    (<code>0.76&times;</code> — the print palette is in fact <em>less</em> saturated than SD's default).
+    Verdict: <strong>ship at strength&nbsp;1.0</strong>.
+  </figcaption>
+</figure>
+<p>
+  Two things fell out of this that we would not have guessed. First, a single shared validation prompt is
+  itself a bug: "a boat beneath a mountain" is on-theme for Hokusai and says nothing whatsoever about
+  Rembrandt, whose corpus is faces in shadow — <strong>we had been making good LoRAs look weak by testing them
+  on the wrong subject</strong>. Each artist now carries their own on-domain prompt. Second, the fix for a
+  disappointing LoRA is usually <em>not</em> to retrain it: if it is over-trained, an <em>earlier checkpoint</em>
+  — already sitting on disk from the same run — is ten minutes away, while a retrain is over an hour. Measure
+  first, then decide; retraining on suspicion is how a deadline gets eaten.
+</p>
+
+<h3>Old pipeline vs new — what more data actually buys</h3>
+<p>
+  Not retraining on suspicion was the right first call — but it left the real question unanswered:
+  <em>does more data actually make a better style, or does it only feel that way?</em> Guessing wasn't
+  good enough, so we retrained <strong>every</strong> style under the corrected pipeline (the 150-image
+  target, training length scaled per image) on Colab, and compared each one before against after. The
+  comparison is deliberately held on a <strong>single device</strong>: the same seed produces different
+  images on Apple's MPS and Colab's CUDA, so an honest before/after has to keep the GPU fixed. Every
+  figure below is CUDA.
+</p>
+<p>
+  The reference counts reframed the experiment before a single image was scored. The "bigger dataset"
+  only actually happened for <strong>three</strong> artists — Dürer, Turner and Hokusai went from about
+  60 images to 150. For Monet, Cézanne, Cassatt and Van&nbsp;Gogh the public domain had nothing more to
+  give, so their counts were unchanged; and because training length now scales per image, those small
+  sets trained <em>fewer</em> steps than the old fixed 2,400 (Van&nbsp;Gogh 800, Cézanne 1,280).
+  Hiroshige and Rembrandt were already at 150 in both runs, which makes them a built-in
+  <strong>control</strong>: retrain the identical dataset and watch how far the score drifts on its own.
+</p>
+<table>
+  <tr><th>Style</th><th>Images (before&nbsp;→&nbsp;after)</th><th>Style gain, CUDA @ str.&nbsp;1.0</th><th>Resembles the artist? (eye)</th></tr>
+  <tr><td>Dürer</td><td>60 → 150</td><td>+0.246 → +0.265</td><td>yes — the clearest gain</td></tr>
+  <tr><td>Turner</td><td>60 → 150</td><td>+0.289 → +0.286</td><td>yes</td></tr>
+  <tr><td>Hokusai</td><td>~60 → 150</td><td>+0.211 → +0.220</td><td>yes</td></tr>
+  <tr><td>Hiroshige <em>(control)</em></td><td>150 → 150</td><td>+0.334 → +0.328</td><td>yes</td></tr>
+  <tr><td>Rembrandt <em>(control)</em></td><td>150 → 150</td><td>+0.250 → +0.239</td><td>yes</td></tr>
+  <tr><td>Monet</td><td>40 → 40</td><td>+0.245 → +0.243</td><td>on its own subjects only</td></tr>
+  <tr><td>Cézanne</td><td>32 → 32</td><td>+0.237 → +0.223</td><td>no</td></tr>
+  <tr><td>Cassatt</td><td>46 → 46</td><td>+0.181 → +0.177</td><td>no</td></tr>
+  <tr><td>Van&nbsp;Gogh</td><td>19 → 19</td><td>+0.211 → +0.197</td><td>no</td></tr>
+</table>
+<p>
+  On the number, the retrain barely moved anything. The two controls set the scale: retraining an
+  identical 150-image dataset shifts the score by about ±0.03, so that is the noise floor — and almost
+  every before/after delta sits inside it. Only <strong>Dürer</strong> clearly gains (+0.019 at full
+  strength, and +0.034 at half, where the extra images let the engraving style engage earlier). If the
+  CLIP metric were the whole story, the honest headline would be "more data changed almost nothing".
+</p>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/comparison/duerer_old_vs_new.jpg" alt="Dürer before/after: the 60-image LoRA on the left, the 150-image LoRA on the right, same five prompts">
+  <figcaption>
+    <strong>Dürer, before (60 images, left) vs after (150 images, right).</strong> Look at the two
+    right-hand columns — <em>a plate of food, a person on a bicycle</em>: on the left they come back as
+    pale near-photographs; on the right as full copper-plate engravings with cross-hatching. This is the
+    one case where the metric and the eye agree the extra data mattered.
+  </figcaption>
+</figure>
+<p>
+  But the eye tells a cleaner story than the number, and it is the one that set the roster.
+  <strong>Every style that reached 150 images</strong> — Hokusai, Turner, Dürer, Hiroshige, Rembrandt —
+  holds the artist's look across all five prompts. <strong>Every style the public domain capped below
+  that</strong> — Cézanne&nbsp;(32), Cassatt&nbsp;(46), Van&nbsp;Gogh&nbsp;(19) — does not, at any
+  strength. Monet&nbsp;(40) is the honest exception: convincing on its own subjects (water lilies,
+  bridges) but <em>fraying</em> on the modern off-domain prompts in a way the 150-image styles never do.
+  So the line between a style that ships and one that doesn't is essentially the
+  <strong>dataset-size line</strong>, and the threshold here is the 150-image target.
+</p>
+<p>
+  The most useful thing this study surfaced is that <strong>the metric cannot make that call.</strong>
+  CLIP style-gain scores Cézanne at +0.223 and Hokusai at +0.220 — statistically the same — yet Hokusai
+  reads convincingly as ukiyo-e and Cézanne does not read as Cézanne at all. The number is a
+  <em>floor check</em> ("nothing is on fire"), not a quality ranking; the pattern that actually decided
+  the roster was visible only on the contact sheet. That is the concrete argument for keeping a human at
+  the gate.
+</p>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/comparison/vangogh_old_vs_new.jpg" alt="Van Gogh before/after: neither the 19-image before nor after resembles his vibrant colour style">
+  <figcaption>
+    <strong>Van&nbsp;Gogh, before vs after.</strong> The retrain is <em>more</em> Van&nbsp;Gogh — heavier
+    impasto, more swirl — yet neither version reads as the vibrant colourist everyone pictures. The reason
+    is in the data: the Art Institute's public-domain Van&nbsp;Goghs are largely <strong>monochrome
+    drawings</strong>, not his colour canvases, so with only 19 of them the LoRA faithfully learned pencil
+    sketches. A thin corpus can be <em>skewed</em> as well as small — the same lesson as Turner's inherited
+    sepia, one level worse.
+  </figcaption>
+</figure>
+<p>
+  So the roster: the <strong>six</strong> styles that convince — Hokusai, Hiroshige, Turner, Monet, Dürer
+  and Rembrandt — ship in the app; Cézanne, Cassatt and Van&nbsp;Gogh stay here as documented limitations
+  rather than shipped styles. The meta-point is worth the GPU it cost: "more&nbsp;=&nbsp;better" is now a
+  <em>measured, bounded</em> claim rather than a hunch — more data helps until you have enough (around 150
+  varied images), after which the metric saturates and the eye stops improving — and the binding limit on
+  the whole roster was never compute, but how much public-domain work an artist happened to leave behind.
+</p>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/atlas/roster_sd15-base.jpg" alt="All nine LoRA styles plus the base model on one prompt and the same six seeds; the top six read as distinct artist styles, the bottom three collapse toward generic landscapes">
+  <figcaption>
+    <strong>The whole roster in one frame.</strong> The same prompt and the same six seeds (1312–1317), base
+    SD&nbsp;1.5 at style strength&nbsp;1.0, on CUDA — only the style changes from row to row. The top six hold
+    the artist's look across every seed and ship in the app; the three below the divider — Cézanne, Cassatt and
+    Van&nbsp;Gogh, each capped below the 150-image target — fall back toward generic muted landscapes at full
+    strength and stay here as documented limitations. Nothing is cherry-picked: identical prompt, identical
+    seeds, one variable. <a href="atlas/roster_sd15-base.json">settings JSON</a>
+  </figcaption>
+</figure>
+
+<h3>The download that hung: debugging someone else's outage</h3>
+<p>
+  Two days before the deadline, model downloads in Colab began stalling part-way into a large file —
+  reproducibly, with no error, no timeout and no retry. It looked like a network problem, and network
+  problems are where debugging goes to die: every hypothesis is plausible and none is cheap to test.
+</p>
+<p>
+  So instead of testing them one at a time, we ran a single diagnostic that measured all of them in the
+  same runtime, in the same minute, against the same file — and tested each download path in a
+  <em>subprocess</em>, because <code>huggingface_hub</code> freezes its configuration into module constants
+  at import time (an environment variable set in a later cell is a silent no-op, a trap that had already
+  cost us one round of "the fix didn't work"). Raw HTTPS straight at the CDN pulled 246&nbsp;MB in
+  <strong>one second</strong>; the plain hub downloader finished in <strong>1.2&nbsp;s</strong>; the same
+  call over <strong>Xet</strong> — the Hub's default transfer backend — <strong>stalled at ~78&nbsp;MB and
+  never recovered</strong>. Network, region, disk, RAM, token and rate limits: all exonerated at once.
+</p>
+<p>
+  The tempting conclusion — "Xet is broken, disable it, done" — was <em>wrong</em>, and it took a second
+  round to see why. Disabling Xet turned the silent hang into an honest error, and that error named the
+  real culprit: <code>403 Forbidden — Auth failed: SignatureError: invalid key pair id</code>. Hugging Face's
+  CDN was <strong>rejecting Hugging Face's own signed download links</strong>. The Hub's <em>storage</em> is
+  Xet regardless of what the client is told, so the download is redirected to that CDN either way; turning
+  Xet off changes how the bytes are fetched, not where from. A public issue
+  (<a href="https://github.com/huggingface/datasets/issues/8328">huggingface/datasets#8328</a>) confirmed it,
+  down to the same broken signing-key id — a live platform outage, nothing to do with this project, and
+  nothing we could fix.
+</p>
+<p>
+  What we <em>could</em> exploit was that the failures are intermittent and the Hub cache
+  <strong>resumes</strong>: a failed attempt keeps every file it already fetched. So the notebooks now
+  pre-fetch every model in a retry loop before the app starts. Even when most requests fail, the loop
+  converges — it only has to roll the dice often enough. Disabling Xet remains necessary for a reason worth
+  stating plainly: <em>you cannot retry a hang.</em> The Xet client waits forever on the broken CDN instead
+  of raising, so the first fix had to happen before the second one was even possible.
+</p>
+<p>
+  Three lessons. "It works on my machine" was <em>not</em> evidence — locally the model was cached, so the
+  download path was never exercised; the absence of a symptom said nothing. An optimisation added for speed
+  had quietly become the single thing standing between the project and a working demo. And the first
+  plausible fix that makes a symptom change is not the same as the cause: the diagnostic that turned a hang
+  into an error message was worth more than the fix it appeared to be.
+</p>
+
+<h3>Memory discipline &amp; exact reproducibility</h3>
+<p>
+  Model switching frees the previous pipeline before loading the next, so VRAM never doubles (measured:
+  it stays flat across switches and returns to zero on unload). Seeds go through <code>torch.Generator</code>
+  — on Apple&nbsp;Silicon deliberately on the CPU device — so identical settings reproduce an identical image
+  on both the local Mac and the Colab T4.
+</p>
+
+<h3>Interface decisions for non-experts</h3>
+<p>
+  Jargon was removed from the labels, a first-run hint was added, the output and history were unified into a
+  single preview gallery (newest shown large), and a subtle one-click lag in the download button was fixed
+  (the file is prepared reactively rather than in the button's own click handler). Beyond that, three
+  decisions did most of the work.
+</p>
+<p>
+  <strong>The default view hides the settings, not the prompt.</strong> The first version put a JSON dump of
+  every image's metadata permanently on screen — the one thing a beginner has no use for — while the thing
+  they actually want to see, <em>the exact words that made this picture</em>, was buried inside it. Now the
+  prompt sits under the image and the full settings live behind an <strong>Advanced</strong> switch. Nothing
+  is lost: the settings are embedded in the PNG regardless, so "reuse these settings" still works on any
+  image the app has ever made.
+</p>
+<p>
+  <strong>Loading had to become visible, which meant leaving Gradio's own progress behind.</strong> A first
+  run downloads several gigabytes and then denoises for minutes; a spinner is not an answer to "is this
+  working?". Because a diffusers call blocks, the app runs the work on a worker thread and streams progress
+  from a tracker. The numbers come for free from an observation: diffusers' denoising loop and
+  huggingface_hub's downloader are <em>both</em> tqdm subclasses, so patching tqdm once reports megabytes
+  while a model downloads and steps while an image renders — without threading a callback through the
+  pipeline at all. A second bar counts images during a grid, and both carry an ETA.
+</p>
+<p>
+  <strong>Controls that don't apply grey out instead of disappearing.</strong> This started as a bug hunt:
+  sliders would render blank and only appear once you touched them. The cause is that Gradio mounts a slider
+  inside a hidden container at zero width, so it never computes its geometry. Rather than fight that, the
+  layout stopped hiding things — a setting that doesn't apply right now is disabled and says why in its own
+  description line, which is better for a beginner anyway (you can see that "style strength" exists before
+  you have picked a style). The rule has one honest exception, found by measuring rather than assuming:
+  Gradio renders a <em>disabled number field identically to an enabled one</em> — same colour, same opacity,
+  only the mouse cursor differs — so greying one is a lie. Number fields don't suffer the mount bug, so those
+  are hidden instead. Each mechanism is used where it actually communicates something.
+</p>
+
+<h2>Known limitations</h2>
+<ul>
+  <li><strong>Hallucinated "text"</strong> — Hokusai outputs sometimes invent Japanese-looking characters
+    or cartouches, learned from inscriptions in the training prints.</li>
+  <li><strong>Inherited sepia</strong> — Turner outputs carry a warm/sepia cast from the engraving medium,
+    and Turner's oeuvre is landscape-heavy, so his style generalises less than Hokusai's.</li>
+  <li><strong>Style strength is prompt/seed-dependent</strong> — some prompts need a higher style strength
+    for the look to come through clearly.</li>
+  <li><strong>Style quality tracks dataset size</strong> — the LoRAs built from the largest public-domain
+    sets (Hokusai, Turner) transfer style most convincingly; those built from thinner sets are visibly
+    weaker and lean toward reproducing training motifs instead of the style itself. This is now
+    <em>measured</em> rather than asserted — see the scorecard above.</li>
+  <li><strong>The scorecard's thresholds are heuristics, not laws</strong> — they are calibrated by eye and
+    exist to rank the LoRAs and point attention, not to ship anything on their own. The contact sheet
+    remains the arbiter, and a human can override the gate.</li>
+  <li><strong>The roster is limited by the public domain, not by taste</strong> — several artists we wanted
+    (Käthe Kollwitz above all) simply have no public-domain works in the source collection, and are
+    therefore absent by design rather than by preference.</li>
+  <li><strong>The safety checker false-positives, and used to fail silently</strong> — an early render of the
+    parameter atlas's CFG&nbsp;×&nbsp;steps grid (CFG&nbsp;11.5, 5 steps) came back as a flat black square from
+    exactly this: an ordinary landscape prompt tripped it, and at the time a flagged image was replaced with a
+    black square with no explanation anywhere but the terminal (that specific cell didn't reproduce once the
+    grid was re-rendered at a different step range — see the note in the CFG&nbsp;×&nbsp;steps section below).
+    The app now catches this and shows a plain error in the state panel instead — a fix this project's own atlas
+    ended up needing.</li>
+</ul>
+
+<h2>Parameter atlas</h2>
+<p>
+  Every grid below was generated <em>in the app itself</em>, with its Compare mode — no separate offline script.
+  That is the point: the parameter study and the product run on the same engine, so a reader can reproduce any
+  cell by typing its settings into the same interface. Each grid was exported as a PNG plus a JSON carrying the
+  <strong>full settings of every single cell</strong>, so no image in this study is a dead end.
+</p>
+<p>
+  Held fixed everywhere: the prompt <em>"lone traveler on a path beside a river, a great mountain behind, the
+  low evening sun breaking through clouds"</em>, the negative prompt <em>"lowres, blurry, watermark, text"</em>,
+  512×512, and — outside the CFG&nbsp;×&nbsp;Steps grid — prompt strength 7.5 and 30 steps. The style under test
+  is the project's <strong>Katsushika Hokusai</strong> LoRA. Everything here was rendered on <strong>CUDA</strong>
+  (a Colab T4) — the same device as the live demo — so every cell is reproducible on the machine that will show it.
+</p>
+
+<h3>Prompt strength × detail (CFG × steps)</h3>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/atlas/atlas_cfg-steps_sd15-base.jpg" alt="5×5 grid: prompt strength (CFG) 1–15 across the columns, detail (steps) 4–40 down the rows, SD 1.5 base, no style, fixed seed 1312">
+  <figcaption>
+    SD&nbsp;1.5 base, no style, seed 1312. Columns: prompt strength (CFG) 1 → 15. Rows: detail (steps) 4 → 40.
+    <a href="atlas/atlas_cfg-steps_sd15-base.json">settings JSON</a>
+  </figcaption>
+</figure>
+<p>
+  <strong>The seed pins the noise, not the picture — composition moves in both directions.</strong> At 4 steps
+  (the whole top row) the sampler never reaches the wide river-and-mountain scene the other four rows share: it
+  settles instead on a close, fog-bound tangle of bare trees, missing the river, the mountain and the sun break
+  entirely. That is step count deciding <em>what</em> is in frame, not just how finished it looks. From 13 steps
+  on the wide scene does hold, but reading across a row still isn't just "how, not what": the mountain's outline,
+  the sun's position, the grass colour and where the traveller stands all shift column to column, alongside the
+  expected climb from CFG&nbsp;1's washed-out, low-contrast read to CFG&nbsp;15's brittle, oversaturated one. Read
+  down a column and the first jump, 4 → 13 steps, still does most of the work, and 31 → 40 still changes almost
+  nothing for most of a step budget more render time.
+</p>
+<p>
+  Two cells earn a closer look than "washed out" or "oversaturated" cover. At <strong>CFG&nbsp;1, 4
+  steps</strong> — top-left, the least-guided and least-resolved corner — most of the prompt simply never
+  arrived: no river, no mountain, no readable light source, just a muddy close-up of tree trunks around one
+  indistinct dark shape. At <strong>CFG&nbsp;1, 40 steps</strong>, the extra steps resolve a full scene again, but
+  a faint signature is legible woven into the clouds — a memorised stock-photo watermark surfacing out of
+  SD&nbsp;1.5's training data, unrelated to anything in the prompt. And at the opposite corner, <strong>CFG&nbsp;15, 4
+  steps</strong>, "oversaturated" undersells it: the whole frame carries a faint moiré texture, a green halo sits
+  around the traveller, and a pale, textureless patch floats top-right with no source in the scene — CFG and step
+  count compounding into genuine artifacts, not just hot colour.
+</p>
+<p>
+  One more thing worth naming, because it's a finding about reproducibility itself, not about this image: an
+  earlier render of this exact grid — same prompt, same seed, same checkpoint, only the detail range set to
+  5 → 50 instead of 4 → 40 — hit a flat, textureless black square at CFG&nbsp;11.5, 5 steps: the safety checker's
+  silent block (this project's own app now surfaces that as an in-panel error instead of a silent black image; see
+  above). That cell doesn't reproduce here — CFG&nbsp;11.5 at 4 steps is a normal, if hazy, render. A fixed seed
+  pins the noise, not immunity from a one-off trigger that a handful of steps either side can tip into or out of —
+  the same lesson the rest of this section keeps landing on, from a different angle.
+</p>
+
+<h3>Style strength</h3>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/atlas/atlas_lora-weight_sd15-base_hokusai.jpg" alt="Row of six images: Hokusai LoRA at strength 0.0, 0.2, 0.4, 0.6, 0.8, 1.0">
+  <figcaption>
+    SD&nbsp;1.5 base + Hokusai, seed 1312, style strength 0.0 → 1.0.
+    <a href="atlas/atlas_lora-weight_sd15-base_hokusai.json">settings JSON</a>
+  </figcaption>
+</figure>
+<p>
+  <strong>The coarse sweep reads like a hard switch.</strong> At 0.0 through 0.6 the image is still a photograph;
+  by 0.8 it has become a woodblock print — flat colour fields, paper grain, a muted earth-and-indigo palette,
+  forms reduced to outlined shapes. At this step size (0.2) that looks like a single snap somewhere between 0.6
+  and 0.8. The finer sweep below shows it's more precise, and less abrupt, than that.
+</p>
+<figure style="margin: 1.5rem 0;">
+  <img src="images/atlas/atlas_lora-weight-fine_sd15-base_hokusai.jpg" alt="Row of six images: the same Hokusai sweep zoomed into strength 0.6, 0.68, 0.76, 0.84, 0.92, 1.0">
+  <figcaption>
+    The same sweep zoomed into the transition: strength 0.6 → 1.0 in steps of ~0.08.
+    <a href="atlas/atlas_lora-weight-fine_sd15-base_hokusai.json">settings JSON</a>
+  </figcaption>
+</figure>
+<p>
+  A finer sweep splits the transition into two different things happening at two different rates. The
+  <em>medium</em> flips fast: at <strong>0.6</strong> the frame is still a photograph, by <strong>0.68</strong> —
+  one 0.08 increment later — it is already rendered as a print, flat colour fields and all. But at 0.68, and
+  still at 0.76, that print is close to empty next to the photograph it replaced: no pine tree, no traveller,
+  just hills and a river. The <em>content</em> catches up far more slowly, and it arrives with its own surprise —
+  at <strong>0.84</strong> a large, gnarled pine suddenly fills the top-left corner of the frame, with no
+  equivalent anywhere in the prompt (which never mentions a tree at all). That tree is a motif the LoRA is
+  hallucinating on its own, not a stronger rendering of anything asked for — the clearest single instance of what
+  the training scorecard calls <em>prompt&nbsp;drop</em>, visible here with the naked eye. From 0.84 to 1.0 the
+  scene keeps changing around it: the fields gain a ploughed texture, the shoreline redraws itself twice, and the
+  traveller — who had actually disappeared from the frame at 0.68 and 0.76 — reappears and changes pose and dress
+  again before 1.0. So the render medium snaps over a single 0.08 step, but the picture the LoRA is actually
+  drawing keeps moving for the rest of the slider's range. It is why the app caps the style-strength slider at
+  1.5 and warns in-line that "above ~1.2 it usually burns".
+</p>
+
+<h3>Checkpoint × style strength, 5 seeds each</h3>
+<p>
+  Three 5×6 grids: seeds 1312–1316 across the columns, style strength down the rows. Same prompt, same
+  seeds, same CFG/steps as everywhere else on this page — only the checkpoint (and, on one grid, the
+  strength range) changes. On SD&nbsp;1.5 base and epiCRealism, strength runs 0.0 → 1.25 in six stops,
+  and strength 0 is the LoRA loaded at zero weight — the bare checkpoint, text conditioning
+  byte-identical to every other row, the same "strength 0 = ground truth" logic as the earlier 25-seed
+  version this replaces. <strong>DreamShaper&nbsp;8's grid instead runs 1.0 → 1.25</strong>: the earlier,
+  coarser sweep already established that DreamShaper is fully painterly by 1.0 (see below), so a 0-start
+  range would spend five of six rows re-confirming that instead of showing what changes above it.
+</p>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+  <figure>
+    <img src="images/atlas/atlas_style-strength-seeds_sd15-base_hokusai.jpg" alt="5 seeds by 6 style-strength grid, SD 1.5 base with Hokusai, strength 0.0 to 1.25">
+    <figcaption>SD&nbsp;1.5 base <a href="atlas/atlas_style-strength-seeds_sd15-base_hokusai.json">settings JSON</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/atlas/atlas_style-strength-seeds_epicrealism_hokusai.jpg" alt="5 seeds by 6 style-strength grid, epiCRealism with Hokusai, strength 0.0 to 1.25">
+    <figcaption>epiCRealism <a href="atlas/atlas_style-strength-seeds_epicrealism_hokusai.json">settings JSON</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/atlas/atlas_style-strength-seeds_dreamshaper8_hokusai.jpg" alt="5 seeds by 6 style-strength grid, DreamShaper 8 with Hokusai, strength 1.0 to 1.25">
+    <figcaption>DreamShaper&nbsp;8 — strength 1.0 → 1.25 <a href="atlas/atlas_style-strength-seeds_dreamshaper8_hokusai.json">settings JSON</a></figcaption>
+  </figure>
+</div>
+<p>
+  <strong>epiCRealism doesn't refuse the style — it just needs more of it before it takes.</strong> On SD&nbsp;1.5
+  base the flip already lands between strength 0.6 and 0.8 (previous section); this grid confirms it at the seed
+  level — none of the 5 seeds are still photographs by 0.8. epiCRealism, at those same six stops, stays fully
+  photographic through 0.75 — all 5 seeds, no exceptions. At 1.0 it finally starts: 2 of 5 seeds cross over into
+  print rendering, the other 3 still photographs. By 1.25, all 5 have converted. So the crossover this project's
+  earlier, coarser 25-seed sweep could only bracket ("still climbing at 1.0, unmeasured above it") sits between
+  1.0 and 1.25 for this checkpoint — a full half-a-strength-unit later than the neutral base.
+</p>
+<p>
+  It doesn't just arrive later — it arrives with more in it. epiCRealism's converted cells at 1.25 carry visibly
+  finer texture than SD&nbsp;1.5 base's own cells at the same strength: more striation in rock and snow, more
+  pattern in the traveller's clothing, more layering in the clouds, where the base checkpoint's print stays
+  flatter and simpler. Photorealism doesn't defeat the style here — it delays it, and once it loses, it keeps
+  contributing its own fine-detail bias underneath the print rendering. <strong>"Style strength 1.0" still isn't a
+  portable quantity</strong> — the concrete number just moved: on this checkpoint it's closer to 1.25, not 1.0, and
+  the honest reference for judging a style stays the neutral base.
+</p>
+<p>
+  DreamShaper&nbsp;8 doesn't resist the way epiCRealism does — the earlier, coarser sweep already showed
+  every seed turning painterly by strength 1.0. What the 1.0 → 1.25 grid adds is what happens once it's
+  already "won": DreamShaper doesn't stay in its own idiom, it starts <strong>losing ground back to
+  Hokusai</strong>. At 1.0 every cell reads as DreamShaper's own polished concept-art — dense, individually
+  rendered trees, photographically shaded clouds, a generic hiker in modern outdoor gear. By 1.25, the sky
+  in every cell has flattened into the same line-drawn, flat-colour cloud bands the SD&nbsp;1.5-base grids
+  show at full conversion, the mountains simplify toward single iconic peaks, and the traveller has
+  picked up a conical hat and a red robe — Hokusai's print-medium signature surfacing inside a checkpoint
+  that, at 1.0, showed none of it. It's a partial convergence, not a full one: the foliage stays
+  DreamShaper's own dense, painterly mass rather than flattening into Hokusai's woodblock fields. This is
+  the concrete shape of the in-line warning that "above ~1.2 it usually burns" — not a color blow-out like
+  high CFG, but the two style priors visibly fighting over different parts of the same frame.
+</p>
+<p>
+  One artefact is worth naming rather than cropping out. The red cartouches and pseudo-seals that surface across
+  the base checkpoint's converted cells are <strong>not decoration the model invented</strong> — they are the
+  furniture of the medium. Training on museum scans of prints teaches the printed object: margins, seals, title
+  blocks, folds. A style LoRA learns whatever is <em>consistently in the frame</em>.
+</p>
+
+<h2>Example generations</h2>
+<p>
+  Twelve renders, five prompts, six styles — every generated PNG already carries its full
+  settings embedded in the file, and the same block sits behind each "settings" link below.
+  All rendered on <strong>CUDA</strong> (a Colab T4), SD&nbsp;1.5 base, style strength 1.0,
+  512×512.
+</p>
+
+<h3>"a great wave breaking over small fishing boats, seen from the shore"</h3>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/examples/example_great-wave_hokusai-a.jpg" alt="A great wave breaking over small fishing boats, in Katsushika Hokusai's style, seed 3080440566">
+    <figcaption>Katsushika Hokusai <a href="examples/example_great-wave_hokusai-a.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_great-wave_hokusai-b.jpg" alt="A great wave breaking over small fishing boats, in Katsushika Hokusai's style, seed 2335357976, a second seed">
+    <figcaption>Katsushika Hokusai — a second seed <a href="examples/example_great-wave_hokusai-b.json">settings</a></figcaption>
+  </figure>
+</div>
+
+<h3>"travellers resting under a large pine tree beside a dirt road"</h3>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/examples/example_travellers-pine_turner.jpg" alt="Travellers resting under a large pine tree beside a dirt road, in J.M.W. Turner's style">
+    <figcaption>J.M.W. Turner <a href="examples/example_travellers-pine_turner.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_travellers-pine_hiroshige.jpg" alt="Travellers resting under a large pine tree beside a dirt road, in Utagawa Hiroshige's style">
+    <figcaption>Utagawa Hiroshige <a href="examples/example_travellers-pine_hiroshige.json">settings</a></figcaption>
+  </figure>
+</div>
+
+<h3>"an old man's face lit from one side, deep shadow behind him"</h3>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/examples/example_old-man-face_rembrandt.jpg" alt="An old man's face lit from one side, deep shadow behind him, in Rembrandt van Rijn's style">
+    <figcaption>Rembrandt van Rijn <a href="examples/example_old-man-face_rembrandt.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_old-man-face_duerer.jpg" alt="An old man's face lit from one side, deep shadow behind him, in Albrecht Dürer's style">
+    <figcaption>Albrecht Dürer <a href="examples/example_old-man-face_duerer.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_old-man-face_hiroshige.jpg" alt="An old man's face lit from one side, deep shadow behind him, in Utagawa Hiroshige's style">
+    <figcaption>Utagawa Hiroshige <a href="examples/example_old-man-face_hiroshige.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_old-man-face_turner.jpg" alt="An old man's face lit from one side, deep shadow behind him, in J.M.W. Turner's style">
+    <figcaption>J.M.W. Turner <a href="examples/example_old-man-face_turner.json">settings</a></figcaption>
+  </figure>
+</div>
+<p>
+  The same portrait prompt through four styles is the clearest single demonstration of what a
+  style LoRA changes: Rembrandt's chiaroscuro, Dürer's engraved line, Hiroshige's flat print
+  colour, and Turner's atmospheric haze are all recognisably themselves, on the same face.
+</p>
+
+<h3>"a hand holding a bundle of wildflowers against a plain background"</h3>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/examples/example_wildflowers_monet.jpg" alt="A hand holding a bundle of wildflowers against a plain background, in Claude Monet's style">
+    <figcaption>Claude Monet <a href="examples/example_wildflowers_monet.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_wildflowers_hiroshige.jpg" alt="A hand holding a bundle of wildflowers against a plain background, in Utagawa Hiroshige's style">
+    <figcaption>Utagawa Hiroshige <a href="examples/example_wildflowers_hiroshige.json">settings</a></figcaption>
+  </figure>
+</div>
+
+<h3>"a field of poppies stretching toward a distant windmill"</h3>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/examples/example_poppies_hiroshige.jpg" alt="A field of poppies stretching toward a distant windmill, in Utagawa Hiroshige's style">
+    <figcaption>Utagawa Hiroshige <a href="examples/example_poppies_hiroshige.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/examples/example_poppies_monet.jpg" alt="A field of poppies stretching toward a distant windmill, in Claude Monet's style">
+    <figcaption>Claude Monet <a href="examples/example_poppies_monet.json">settings</a></figcaption>
+  </figure>
+</div>
+
+<h2>Model &amp; LoRA credits and licences</h2>
+<table>
+  <tr><th>Name</th><th>Source</th><th>Licence</th></tr>
+  <tr><td>Stable Diffusion 1.5 (base)</td><td><code>stable-diffusion-v1-5/stable-diffusion-v1-5</code></td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>DreamShaper 8</td><td><code>Lykon/dreamshaper-8</code></td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>epiCRealism</td><td><code>emilianJR/epiCRealism</code></td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Hokusai (Ukiyo-e) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Hiroshige (Ukiyo-e) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Turner (Oil) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Monet (Impressionism) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Dürer (Renaissance) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>Rembrandt (Etching) LoRA</td><td>self-trained; training data CC0, Art Institute of Chicago</td><td>CreativeML OpenRAIL-M</td></tr>
+  <tr><td>CLIP ViT-B/32 (used for scoring only, not generation)</td><td><code>openai/clip-vit-base-patch32</code></td><td>MIT</td></tr>
+</table>
+<p style="margin-top:1rem;">
+  The six LoRAs above are the styles that passed review and ship in the app; three further LoRAs — Cézanne,
+  Cassatt and Van&nbsp;Gogh — were trained on the same CC0 Art&nbsp;Institute&nbsp;of&nbsp;Chicago data but
+  appear only in the findings above, as documented limitations rather than shipped styles.
+  No LoRA was trained on the likeness of a real, living person: every artist involved died long ago and
+  every training image is public domain (CC0), verified per-object against the Art Institute of Chicago's
+  <code>is_public_domain</code> flag rather than assumed. The safety checker stays active in the
+  public-facing app.
+</p>
+
+<footer>
+  Format inspiration (not scope):
+  <a href="https://dreambooth.github.io">dreambooth.github.io</a>,
+  <a href="https://ricardomehl.github.io/publication/LatentWorld_Documentation">ricardomehl.github.io/publication/LatentWorld_Documentation</a>
+</footer>
+
+</body>
+</html>

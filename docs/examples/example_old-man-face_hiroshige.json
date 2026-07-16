@@ -1,0 +1,17 @@
+{
+  "prompt": "an old man's face lit from one side, deep shadow behind him",
+  "negative_prompt": "",
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "steps": 30,
+  "seed": 446905377,
+  "lora_weight": 1,
+  "checkpoint_id": "sd15-base",
+  "checkpoint_label": "Stable Diffusion 1.5",
+  "lora_id": "hiroshige",
+  "lora_label": "Utagawa Hiroshige",
+  "effective_prompt": "sks, an old man's face lit from one side, deep shadow behind him",
+  "device": "cuda",
+  "dtype": "float16"
+}

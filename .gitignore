@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+
+# macOS
+.DS_Store
+
+# Generated / large artifacts
+outputs/
+*.safetensors
+*.ckpt
+*.pt
+
+# LoRA training pipeline working dirs (datasets, checkpoints, staged weights)
+lora_work/
+app_loras/
+
+# diffusers checkout cloned by the training notebook (never commit it)
+diffusers/
+
+# Old course material — local reference only, never part of the git project
+reference/
+
+# Local-only raw data — multi-GB, some files over GitHub's 100MB limit, never committed.
+# Holds the before/after retrain snapshots (verification/) and the raw atlas/roster grids
+# that fed docs/ (documentation-grids/). The final LoRAs live on the HF Hub and reproduce
+# via the training notebook; the committed verification evidence is the before/after
+# montages in docs/images/comparison/. See local-data/README.md.
+local-data/
+
+# Internal working notes — solo project, no need to publish planning/process material.
+# Stay on disk locally; never tracked.
+CLAUDE.md
+TASKS.md
+DESIGN_REVIEW.md
+
+# PDF export for the assignment submission only, not part of the published site.
+docs/pdf/
+
+# Editor / local tooling
+.claude/settings.local.json
+.ipynb_checkpoints/
+
+# Gradio local cache (flagging, certs) created when launching the app
+.gradio/
