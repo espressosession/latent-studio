@@ -19,6 +19,7 @@ from .callbacks import (
     on_advanced_toggle,
     on_button_label_change,
     on_controlnet_change,
+    on_controlnet_toggle,
     on_gallery_select,
     on_generate,
     on_import_settings,
@@ -32,6 +33,7 @@ from .design_tokens import (
     DESC_AVOID,
     DESC_CFG,
     DESC_COMPARE,
+    DESC_CONTROLNET_TOGGLE,
     DESC_MODEL,
     DESC_PRELOAD,
     DESC_PROMPT,
@@ -240,11 +242,12 @@ def build_app() -> gr.Blocks:
                             "Roll a new seed", size="sm", icon=button_icon("dice"), interactive=False
                         )
 
-            # ControlNet (ADV) is disabled for the submission — unstable on the Colab
-            # demo runtime; the core generator is complete without it. Components stay
-            # defined so the wiring below still resolves; on_generate hardwires the
-            # dispatch to the plain pipeline regardless of these controls.
-            with gr.Tab("Reference image", visible=False):
+            # ControlNet (ADV) is experimental and off by default — unpredictable on some
+            # GPU runtimes in earlier testing. The Setup tab's toggle is the only way in;
+            # the tab itself stays hidden until then, and on_generate only builds a real
+            # controlnet_types list when the toggle is actually on. The core generator
+            # works fully with this off, which is the default.
+            with gr.Tab("Reference image", visible=False) as reference_tab:
                 with gr.Row():
                     with gr.Column():
                         _heading("Copy a shape from an image", DESC_REFERENCE)
@@ -304,6 +307,11 @@ def build_app() -> gr.Blocks:
                         preload_button = gr.Button(
                             "Preload all models", size="sm", icon=button_icon("download")
                         )
+                    with gr.Column():
+                        _heading("Reference image (ControlNet)", DESC_CONTROLNET_TOGGLE)
+                        controlnet_toggle = gr.Checkbox(
+                            label="Enable — experimental", value=False, container=False, info="",
+                        )
 
         # ---------------- wiring ----------------
         gating_inputs = [field1, field2, lora_radio, seed_mode, controlnet_select]
@@ -362,6 +370,10 @@ def build_app() -> gr.Blocks:
         advanced_toggle.change(
             on_advanced_toggle, inputs=advanced_toggle, outputs=advanced_column, show_progress="hidden"
         )
+        controlnet_toggle.change(
+            on_controlnet_toggle, inputs=controlnet_toggle, outputs=[reference_tab, controlnet_select],
+            show_progress="hidden",
+        )
         preload_button.click(
             on_preload, outputs=[preload_button, state_info], show_progress="hidden"
         )  # the button + state panel draw their own progress
@@ -381,7 +393,7 @@ def build_app() -> gr.Blocks:
             inputs=[
                 checkpoint_radio, lora_radio, prompt_input, negative_prompt_input,
                 cfg_slider, steps_slider, seed_mode, seed_input, lora_weight_slider,
-                controlnet_select, controlnet_preview, controlnet_scale,
+                controlnet_toggle, controlnet_select, controlnet_preview, controlnet_scale,
                 field1, from1, to1, count1,
                 field2, from2, to2, count2,
                 history_state,

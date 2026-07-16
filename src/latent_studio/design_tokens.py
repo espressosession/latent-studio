@@ -90,6 +90,11 @@ DESC_PRELOAD = (
     "before a live demo, so the first switch isn't a wait. It only fills the cache; nothing is "
     "kept in memory."
 )
+DESC_CONTROLNET_TOGGLE = (
+    "Turns on the Reference image tab (ControlNet). Off by default — it's held back as "
+    "experimental, since it's had unpredictable failures on some GPU runtimes. The core "
+    "generator works fully without it either way."
+)
 
 STATUS_SWEPT = "Being compared right now — set its range in the Compare tab."
 STATUS_STYLE_OFF = "Pick a style first."
