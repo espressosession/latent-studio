@@ -497,7 +497,7 @@ APP_PIP_INSTALL = (
 # are staged into app_loras/, which pipeline_manager.set_lora already prefers over a
 # repo id — so once this cell has actually run, styles load with no network at all.
 PREFLIGHT_MARKDOWN = (
-    "## Download the models (optional — off by default)\n"
+    "## 5. Download the models (optional — off by default)\n"
     "The app already downloads each model itself the first time you select it, with its "
     "own loading animation, and has a **\"Preload all models\"** button in its Setup tab "
     "for the same one-shot warm-up this cell does. Leaving `RUN_PREFLIGHT` at `False` "
@@ -816,6 +816,11 @@ def build_app_notebook() -> dict:
         code_cell(HF_SETUP, title="Hugging Face login"),
         markdown_cell("## 3. Imports and Globals"),
         code_cell("\n".join(all_imports) + "\n", title="Imports"),
+        markdown_cell(
+            "## 4. App modules (reference)\n"
+            "One card per file in `src/latent_studio/`, in the order they're defined — run "
+            "them all to build the app below. Skip ahead if you're only here to launch it."
+        ),
     ]
 
     cells.extend(module_cells(module_sources, "src/latent_studio"))
@@ -825,7 +830,7 @@ def build_app_notebook() -> dict:
 
     cells.append(
         markdown_cell(
-            "## Launch the app\nSwitch to a GPU runtime first. `share=True` creates a "
+            "## 6. Launch the app\nSwitch to a GPU runtime first. `share=True` creates a "
             "public link outside this Colab session — the way to reach the app from "
             "another device, e.g. for a live demo. Load the printed link once to "
             "confirm it works before depending on it. `inbrowser=True` only opens a "
@@ -892,13 +897,19 @@ def build_training_notebook() -> dict:
         code_cell(CLONE_DIFFUSERS, title="Clone diffusers"),
         markdown_cell("## 4. Imports and Globals"),
         code_cell("\n".join(all_imports) + "\n", title="Imports"),
+        markdown_cell(
+            "## 5. Training modules (reference)\n"
+            "One card per file in `training/`, in dependency order (`pipeline.py` "
+            "references every other module, so it comes last) — run them all to define "
+            "the pipeline below. Skip ahead if you're only here to run it."
+        ),
     ]
 
     cells.extend(module_cells(module_sources, "training"))
 
     cells.append(
         markdown_cell(
-            "## 5. Persistent storage (Google Drive)\n"
+            "## 6. Persistent storage (Google Drive)\n"
             "Mount Drive so datasets, checkpoints, validation grids and exports "
             "survive a runtime disconnect and are reusable across sessions — "
             "everything lands under `WORK_DIR/<artist>/{raw,dataset,output,validation,"
@@ -923,7 +934,7 @@ def build_training_notebook() -> dict:
     )
     cells.append(
         markdown_cell(
-            "## 6. Pre-fetch the models (run this before training)\n"
+            "## 7. Pre-fetch the models (run this before training)\n"
             "This pipeline downloads from the Hub **three times**, in three different steps: "
             "**BLIP** when it captions, **SD 1.5** when it trains, **CLIP** when it scores. "
             "Since **2026-07-13** the Hub's CDN intermittently rejects its own signed download "
@@ -940,7 +951,7 @@ def build_training_notebook() -> dict:
     cells.append(code_cell(TRAINING_PREFLIGHT, title="Pre-fetch the models"))
     cells.append(
         markdown_cell(
-            "## 7. Run the pipeline (one artist per pass)\n"
+            "## 8. Run the pipeline (one artist per pass)\n"
             "Pick an artist, then run the cells **in order**. The validation step is a "
             "gate: look at the grids before exporting. Repeat for the second artist by "
             "setting `ARTIST = \"turner\"` and re-running this section."
@@ -1081,7 +1092,7 @@ def build_training_notebook() -> dict:
 
     cells.append(
         markdown_cell(
-            "## 8. Re-validate & score everything already trained (batch, no retraining)\n"
+            "## 9. Re-validate & score everything already trained (batch, no retraining)\n"
             "The section above trains and ships **one** artist. This one does the reverse: it "
             "takes the artists you have **already** trained — whose checkpoints sit in Drive — "
             "and re-runs step 5 (validation) + step 5b (scorecard) over all of them in one pass, "
@@ -1119,7 +1130,7 @@ def build_training_notebook() -> dict:
     )
     cells.append(
         markdown_cell(
-            "After retraining the roster (rerun section 7 per artist), rerun the same batch with "
+            "After retraining the roster (rerun section 8 per artist), rerun the same batch with "
             "`tag=\"after\"` and diff the two tables. Cheaper variants, if you only need the "
             "numbers or want to grade what is actually published:\n\n"
             "```python\n"
