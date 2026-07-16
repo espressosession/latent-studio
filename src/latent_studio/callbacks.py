@@ -254,10 +254,19 @@ def on_preload():
 def on_import_settings(file):
     """Import: apply a settings JSON, or a PNG's embedded metadata, to the live
     controls — exactly like "Reuse these settings", but from a file, so it works
-    across sessions too. Errors are plain language in the state panel, never a popup."""
+    across sessions too. Errors are plain language in the state panel, never a popup.
+
+    A generator, not a plain return: a large grid export's embedded metadata is a
+    real parse (and the upload itself can take a moment), and the fields it's about
+    to overwrite — checkpoint, style, Compare's own sweep config — are exactly what
+    Generate reads. The interim "Importing…" yield disables Generate for that window
+    so a click mid-import can't race the restore and fire on a half-applied state."""
     noop = tuple(gr.update() for _ in range(APPLY_OUTPUT_COUNT))
     if file is None:
-        return (*noop, status_html("alert", "No file selected."))
+        yield (*noop, status_html("alert", "No file selected."), gr.update())
+        return
+
+    yield (*noop, status_html("upload", "Importing settings…"), gr.update(interactive=False, value="Importing…"))
 
     path = file if isinstance(file, str) else file.name
     ext = os.path.splitext(path)[1].lower()
@@ -268,14 +277,22 @@ def on_import_settings(file):
         else:
             metadata = read_metadata(path)
             if metadata is None:
-                return (*noop, status_html(
+                yield (*noop, status_html(
                     "alert",
                     "This image has no Latent Studio metadata embedded — was it downloaded from this app?",
-                ))
+                ), gr.update(interactive=True))
+                return
     except json.JSONDecodeError as exc:
-        return (*noop, status_html("alert", f"Not a valid settings file: {exc}"))
+        yield (*noop, status_html("alert", f"Not a valid settings file: {exc}"), gr.update(interactive=True))
+        return
     except Exception as exc:  # noqa: BLE001 — surfaced in the panel, never a popup
-        return (*noop, status_html("alert", f"Couldn't read that file: {exc}"))
+        yield (*noop, status_html("alert", f"Couldn't read that file: {exc}"), gr.update(interactive=True))
+        return
+
+    values = metadata_to_control_values(metadata)
+    checkpoint_id, lora_id, field1, field2 = values[0], values[1], values[11], values[15]
+    count1, count2 = values[14].get("value", 1), values[18].get("value", 1)
+    total = image_count(field1, count1, field2, count2)
 
     warnings = import_warnings(metadata)
     message = (
@@ -283,9 +300,10 @@ def on_import_settings(file):
         if warnings
         else "Settings imported — press Generate to reproduce it."
     )
-    return (
-        *metadata_to_control_values(metadata),
+    yield (
+        *values,
         status_html("alert" if warnings else "check", message),
+        gr.update(interactive=True, value=generate_button_label(checkpoint_id, lora_id, total)),
     )
 
 

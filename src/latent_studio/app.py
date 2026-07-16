@@ -406,7 +406,7 @@ def build_app() -> gr.Blocks:
             metadata_to_control_values, inputs=metadata_state, outputs=apply_outputs, show_progress="hidden"
         )
         import_button.upload(
-            on_import_settings, inputs=import_button, outputs=apply_outputs + [state_info],
+            on_import_settings, inputs=import_button, outputs=apply_outputs + [state_info, generate_button],
             show_progress="hidden",
         )
 
