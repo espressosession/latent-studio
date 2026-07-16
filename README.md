@@ -15,8 +15,7 @@ scored, published adapter.
 > library versions — so it is **disabled in the shipped app**; the code stays in the tree. The advanced
 > work in this project is the automated, measured LoRA pipeline below.
 
-- **Write-up (live):** https://espressosession.github.io/latent-studio/
-- **Project brief & architecture:** [CLAUDE.md](CLAUDE.md) · **Status & todos:** [TASKS.md](TASKS.md)
+**Write-up (live):** https://espressosession.github.io/latent-studio/
 
 ## Quickstart — local (MacBook, MPS)
 
@@ -102,10 +101,10 @@ CUDA (the demo device), and the observations are in the "Parameter atlas" sectio
 - `outputs/` — generated grids + scorecards (gitignored; the submitted subset is copied into `docs/`)
 - `reference/` — old course notebooks, local only (gitignored, not part of the repo)
 - `local-data/` — local-only raw data (gitignored, multi-GB): the before/after retrain snapshots
-  (`verification/before`, `verification/after`) and the raw atlas/roster grids that fed `docs/`
-  (`documentation-grids/`). The shipped LoRAs live on the HF Hub and reproduce via the training
-  notebook; the committed verification evidence is the before/after contact sheets in
-  `docs/images/comparison/`.
+  (`verification/before`, `verification/after`), the raw atlas/roster grids that fed `docs/`
+  (`documentation-grids/`), and the raw example-generation renders (`documentation-examples/`). The
+  shipped LoRAs live on the HF Hub and reproduce via the training notebook; the committed verification
+  evidence is the before/after contact sheets in `docs/images/comparison/`.
 
 ## Licences
 
