@@ -42,6 +42,20 @@ def _load_depth_model():
     return _depth_processor, _depth_model
 
 
+def unload_depth_model() -> None:
+    """Frees the standalone depth-estimation model. It has no other owner and, unlike
+    the ControlNet/SD pipelines, was never freed anywhere — once loaded it stayed
+    resident in system RAM (it runs on CPU, not the GPU pipeline) for the rest of the
+    process, compounding with whatever checkpoint loads next until the runtime ran out
+    of RAM. Called from ControlNetManager.unload() so it shares the pipeline's own
+    lifecycle instead of outliving it."""
+    global _depth_processor, _depth_model
+    if _depth_model is not None:
+        _depth_processor = None
+        _depth_model = None
+        gc.collect()
+
+
 def depth_preprocess(image: Image.Image) -> Image.Image:
     processor, model = _load_depth_model()
     inputs = processor(images=image, return_tensors="pt")
@@ -141,6 +155,10 @@ class ControlNetManager:
             self.lora_id = "none"
             gc.collect()
             empty_cache(self.device)
+        # Unconditional, not nested in the branch above: Process can load the depth
+        # model without ever running a generation (self.pipe staying None), and this
+        # is the only place that ever frees it.
+        unload_depth_model()
 
     def generate(
         self,

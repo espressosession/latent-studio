@@ -74,7 +74,8 @@ DESC_SEED = (
 DESC_REFERENCE = (
     "Optional, and called ControlNet. Give it a picture and the result keeps that picture's "
     "composition — either its outlines, or how near and far its parts are. Your prompt still "
-    "decides what things are made of."
+    "decides what things are made of. **Experimental** — still being tested, so treat it as a "
+    "feature to use at your own risk rather than a finished control."
 )
 DESC_REFERENCE_SCALE = (
     "How tightly the result sticks to the reference. Around 0.4 it is a loose suggestion, 1.0 "
@@ -84,16 +85,14 @@ DESC_COMPARE = (
     "Generate a grid instead of one image — the fastest way to see what a setting "
     "actually does, laid out side by side."
 )
-DESC_ADVANCED = "Adds a panel with the full settings of the current image, and a button to reuse them on a new one."
+DESC_ADVANCED = (
+    "Adds a panel with the full settings of the current image and a button to reuse them, "
+    "and unlocks the experimental Reference image tab."
+)
 DESC_PRELOAD = (
     "Each model downloads the first time you use it. Pull **all** of them now — handy right "
     "before a live demo, so the first switch isn't a wait. It only fills the cache; nothing is "
     "kept in memory."
-)
-DESC_CONTROLNET_TOGGLE = (
-    "Turns on the Reference image tab (ControlNet). Off by default — it's held back as "
-    "experimental, since it's had unpredictable failures on some GPU runtimes. The core "
-    "generator works fully without it either way."
 )
 
 STATUS_SWEPT = "Being compared right now — set its range in the Compare tab."

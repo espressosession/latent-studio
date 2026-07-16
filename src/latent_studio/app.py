@@ -33,7 +33,6 @@ from .design_tokens import (
     DESC_AVOID,
     DESC_CFG,
     DESC_COMPARE,
-    DESC_CONTROLNET_TOGGLE,
     DESC_MODEL,
     DESC_PRELOAD,
     DESC_PROMPT,
@@ -242,11 +241,10 @@ def build_app() -> gr.Blocks:
                             "Roll a new seed", size="sm", icon=button_icon("dice"), interactive=False
                         )
 
-            # ControlNet (ADV) is experimental and off by default — unpredictable on some
-            # GPU runtimes in earlier testing. The Setup tab's toggle is the only way in;
-            # the tab itself stays hidden until then, and on_generate only builds a real
-            # controlnet_types list when the toggle is actually on. The core generator
-            # works fully with this off, which is the default.
+            # ControlNet (ADV) is experimental — Advanced view (Setup tab) is the only way
+            # in; the tab itself stays hidden until Advanced is on, and on_generate only
+            # builds a real controlnet_types list in that case. The core generator works
+            # fully with this off, which is the default (Advanced itself defaults off).
             with gr.Tab("Reference image", visible=False) as reference_tab:
                 with gr.Row():
                     with gr.Column():
@@ -260,16 +258,19 @@ def build_app() -> gr.Blocks:
                             0.0, 2.0, value=1.0, step=0.05, container=False,
                             info=STATUS_REFERENCE_OFF, interactive=False,
                         )
-                with gr.Row(visible=False) as controlnet_group:
+                with gr.Row():
                     with gr.Column():
+                        _sublabel("Your reference")
                         controlnet_input_image = gr.Image(
-                            label="Your reference", type="pil", sources=["upload"], height=300
+                            container=False, type="pil", sources=["upload"], height=300, interactive=False,
                         )
-                        controlnet_preprocess_button = gr.Button("Process", size="sm")
+                        controlnet_preprocess_button = gr.Button(
+                            "Process", size="sm", interactive=False
+                        )
                     with gr.Column():
+                        _sublabel("What the model will actually follow")
                         controlnet_preview = gr.Image(
-                            label="What the model will actually follow", type="pil",
-                            interactive=False, height=300,
+                            container=False, type="pil", interactive=False, height=300,
                         )
                 gr.Markdown(
                     "_Your chosen style still applies — the reference fixes the composition, "
@@ -306,11 +307,6 @@ def build_app() -> gr.Blocks:
                         _heading("Preload models", DESC_PRELOAD)
                         preload_button = gr.Button(
                             "Preload all models", size="sm", icon=button_icon("download")
-                        )
-                    with gr.Column():
-                        _heading("Reference image (ControlNet)", DESC_CONTROLNET_TOGGLE)
-                        controlnet_toggle = gr.Checkbox(
-                            label="Enable — experimental", value=False, container=False, info="",
                         )
 
         # ---------------- wiring ----------------
@@ -370,8 +366,10 @@ def build_app() -> gr.Blocks:
         advanced_toggle.change(
             on_advanced_toggle, inputs=advanced_toggle, outputs=advanced_column, show_progress="hidden"
         )
-        controlnet_toggle.change(
-            on_controlnet_toggle, inputs=controlnet_toggle, outputs=[reference_tab, controlnet_select],
+        # Reference image rides on the same switch as the Settings panel — see
+        # on_controlnet_toggle's docstring.
+        advanced_toggle.change(
+            on_controlnet_toggle, inputs=advanced_toggle, outputs=[reference_tab, controlnet_select],
             show_progress="hidden",
         )
         preload_button.click(
@@ -380,7 +378,7 @@ def build_app() -> gr.Blocks:
         randomize_button.click(on_randomize_seed, outputs=seed_input, show_progress="hidden")
         controlnet_select.change(
             on_controlnet_change, inputs=controlnet_select,
-            outputs=[controlnet_group, controlnet_preview],
+            outputs=[controlnet_input_image, controlnet_preprocess_button, controlnet_preview],
             show_progress="hidden",
         )
         controlnet_preprocess_button.click(
@@ -393,7 +391,7 @@ def build_app() -> gr.Blocks:
             inputs=[
                 checkpoint_radio, lora_radio, prompt_input, negative_prompt_input,
                 cfg_slider, steps_slider, seed_mode, seed_input, lora_weight_slider,
-                controlnet_toggle, controlnet_select, controlnet_preview, controlnet_scale,
+                advanced_toggle, controlnet_select, controlnet_preview, controlnet_scale,
                 field1, from1, to1, count1,
                 field2, from2, to2, count2,
                 history_state,

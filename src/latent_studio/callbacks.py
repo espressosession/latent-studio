@@ -214,16 +214,20 @@ def on_advanced_toggle(enabled: bool):
 
 
 def on_controlnet_toggle(enabled: bool):
-    """Setup tab's experimental switch: shows/hides the Reference image tab. Turning it
-    off also resets the reference-type radio to "off" rather than leaving it selected
-    underneath — re-enabling later should mean picking a reference type again, not
+    """Reference image is Advanced-only — it rides on the same toggle as the Settings
+    panel and shows/hides alongside it. Turning Advanced off also resets the
+    reference-type radio to "off" rather than leaving it selected underneath —
+    turning Advanced back on later should mean picking a reference type again, not
     silently reactivating whatever was chosen before it was hidden."""
     return gr.update(visible=enabled), gr.update() if enabled else "off"
 
 
 def on_controlnet_change(controlnet_select: str):
-    # Clear the stale preview so switching outlines<->depth re-runs the preprocessor.
-    return gr.update(visible=(controlnet_select != "off")), None
+    # The upload + Process button grey out instead of the row disappearing while no
+    # reference type is picked — matches the app's never-hide-a-control rule. Also
+    # clears the stale preview so switching outlines<->depth re-runs the preprocessor.
+    active = controlnet_select != "off"
+    return gr.update(interactive=active), gr.update(interactive=active), None
 
 
 def on_preprocess(image, controlnet_select: str):
@@ -332,7 +336,7 @@ def on_generate(
     seed_mode,
     seed,
     lora_weight,
-    controlnet_enabled,
+    advanced_view_on,
     controlnet_select,
     controlnet_preview,
     controlnet_scale,
@@ -359,11 +363,11 @@ def on_generate(
     def failed(message):
         return frozen(status_html("alert", message))
 
-    # ControlNet is experimental and off by default (Setup tab toggle) — only build a
-    # real controlnet_types list when it's actually on, regardless of what's selected
-    # underneath (matches on_controlnet_toggle resetting controlnet_select to "off"
-    # whenever the toggle itself goes off).
-    controlnet_types = [controlnet_select] if controlnet_enabled and controlnet_select != "off" else []
+    # ControlNet is experimental and Advanced-only — only build a real controlnet_types
+    # list when Advanced view is actually on, regardless of what's selected underneath
+    # (matches on_controlnet_toggle resetting controlnet_select to "off" whenever
+    # Advanced itself goes off).
+    controlnet_types = [controlnet_select] if advanced_view_on and controlnet_select != "off" else []
     control_images: dict = {}
     controlnet_scales: dict = {}
     if controlnet_types:
