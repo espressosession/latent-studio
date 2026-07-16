@@ -414,5 +414,7 @@ def build_app() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    # Gradio 6 takes theme on launch(), not on the Blocks constructor.
-    build_app().launch(theme=THEME)
+    # Gradio 6 takes theme on launch(), not on the Blocks constructor. inline=False +
+    # inbrowser=True: a real browser tab, not an inline iframe (the default inside a
+    # notebook); footer_links=[] drops Gradio's own API/Settings footer.
+    build_app().launch(theme=THEME, inline=False, inbrowser=True, footer_links=[])
