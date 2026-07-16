@@ -59,13 +59,20 @@ def _image_suffix(count: int) -> str:
     return "image" if count <= 1 else f"{count} images"
 
 
-def generate_button_label(checkpoint_id: str, lora_id: str, count: int = 1) -> str:
+def generate_button_label(
+    checkpoint_id: str, lora_id: str, count: int = 1, controlnet_active: bool = False
+) -> str:
     """The button's resting label: what a click will actually do, and how many images
-    it will produce — folds in what used to be a separate "N images" note."""
+    it will produce — folds in what used to be a separate "N images" note.
+    controlnet_active picks which of the two pipeline singletons is actually going to
+    serve the next click — a ControlNet generation loads/reads controlnet_manager, not
+    manager (which work() unloads whenever ControlNet is on), so checking the wrong one
+    here always reported "Load model & generate" even with a warm ControlNet pipeline."""
     suffix = _image_suffix(count)
-    if not manager.is_ready or manager.checkpoint_id != checkpoint_id:
+    active = controlnet_manager if controlnet_active else manager
+    if not active.is_ready or active.checkpoint_id != checkpoint_id:
         return f"Load model & generate {suffix}"
-    if manager.lora_id != lora_id:
+    if active.lora_id != lora_id:
         return f"Load style & generate {suffix}"
     return f"Generate {suffix}"
 
@@ -340,7 +347,7 @@ def on_generate(
     total_images = image_count(field1, count1, field2, count2)
 
     def label():
-        return generate_button_label(checkpoint_id, lora_id, total_images)
+        return generate_button_label(checkpoint_id, lora_id, total_images, controlnet_active=bool(controlnet_types))
 
     def frozen(state_html):
         return (

@@ -94,14 +94,20 @@ class ControlNetManager:
         ]
         controlnet_arg = controlnets[0] if len(controlnets) == 1 else controlnets
 
-        self.pipe = StableDiffusionControlNetPipeline.from_pretrained(
+        pipe = StableDiffusionControlNetPipeline.from_pretrained(
             checkpoint.repo_id, controlnet=controlnet_arg, torch_dtype=self.dtype, low_cpu_mem_usage=False
         ).to(self.device)
-        self.pipe.scheduler = UniPCMultistepScheduler.from_config(self.pipe.scheduler.config)
+        pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
 
+        # is_ready reads `self.pipe is not None` and is polled from another thread (the
+        # state panel) without a lock — every other attribute it depends on must already
+        # be correct before self.pipe flips non-None, not after. Build the pipeline into
+        # a local first, then assign checkpoint_id/active_types/lora_id, and only then
+        # self.pipe last — same fix as pipeline_manager.load_checkpoint.
         self.checkpoint_id = checkpoint_id
         self.active_types = controlnet_types
         self.lora_id = "none"  # a fresh pipeline carries no adapter
+        self.pipe = pipe
         on_status("ControlNet pipeline ready.")
 
     def set_lora(self, lora_id: str, on_status=None) -> None:

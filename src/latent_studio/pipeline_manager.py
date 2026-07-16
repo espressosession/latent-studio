@@ -94,21 +94,26 @@ class PipelineManager:
         # not every checkpoint ships an fp16 variant (epiCRealism doesn't), so fall back.
         if self.dtype == torch.float16:
             try:
-                self.pipe = StableDiffusionPipeline.from_pretrained(
+                pipe = StableDiffusionPipeline.from_pretrained(
                     checkpoint.repo_id, variant="fp16", **kwargs
                 ).to(self.device)
             except Exception:
                 on_status(f"No fp16 build for {checkpoint.label} — loading full weights...")
-                self.pipe = StableDiffusionPipeline.from_pretrained(
+                pipe = StableDiffusionPipeline.from_pretrained(
                     checkpoint.repo_id, **kwargs
                 ).to(self.device)
         else:
-            self.pipe = StableDiffusionPipeline.from_pretrained(
+            pipe = StableDiffusionPipeline.from_pretrained(
                 checkpoint.repo_id, **kwargs
             ).to(self.device)
 
+        # is_ready reads `self.pipe is not None` and is polled from another thread (the
+        # state panel) without a lock — checkpoint_id must already be correct before
+        # self.pipe flips non-None, not after. Build into a local, assign checkpoint_id
+        # first, self.pipe last.
         self.checkpoint_id = checkpoint_id
         self.lora_id = "none"
+        self.pipe = pipe
         on_status(f"{checkpoint.label} ready.")
 
     def set_lora(self, lora_id: str, on_status: StatusCallback = None) -> None:
