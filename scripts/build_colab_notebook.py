@@ -672,13 +672,20 @@ def markdown_cell(text: str) -> dict:
     return {"cell_type": "markdown", "metadata": {}, "source": text.splitlines(keepends=True)}
 
 
-def code_cell(text: str) -> dict:
+def code_cell(text: str, title: str | None = None) -> dict:
+    """`title` folds the cell into a collapsed Colab form (`#@title` + `cellView:
+    form`): a one-line bar showing just the title, code hidden until clicked open.
+    Reserved for boilerplate a reader doesn't need to see to follow the notebook —
+    installs, login, the flattened module source — never for a cell whose value is
+    meant to be read or edited directly (parameters, pipeline-run calls, the final
+    launch call), which stay plain and always visible."""
+    source = f"#@title {title}\n{text}" if title else text
     return {
         "cell_type": "code",
-        "metadata": {},
+        "metadata": {"cellView": "form"} if title else {},
         "execution_count": None,
         "outputs": [],
-        "source": text.splitlines(keepends=True),
+        "source": source.splitlines(keepends=True),
     }
 
 
@@ -756,7 +763,7 @@ def module_cells(module_sources: list[tuple], path_prefix: str) -> list[dict]:
     cells = []
     for filename, title, description, body in module_sources:
         cells.append(markdown_cell(f"### {title}\n_(`{path_prefix}/{filename}`)_\n\n{description}"))
-        cells.append(code_cell(body))
+        cells.append(code_cell(body, title=filename))
     return cells
 
 
@@ -790,7 +797,7 @@ def build_app_notebook() -> dict:
             "cells. Building/debugging the interface can be done on a CPU runtime."
         ),
         markdown_cell("## 1. Install dependencies"),
-        code_cell(APP_PIP_INSTALL),
+        code_cell(APP_PIP_INSTALL, title="Install dependencies"),
         markdown_cell(
             "## 2. Hugging Face setup\n"
             "Everything this app loads is public, so a token is not needed for *access* — "
@@ -806,15 +813,15 @@ def build_app_notebook() -> dict:
             "the left sidebar, 'Notebook access' on). Otherwise this falls back to an "
             "interactive login."
         ),
-        code_cell(HF_SETUP),
+        code_cell(HF_SETUP, title="Hugging Face login"),
         markdown_cell("## 3. Imports and Globals"),
-        code_cell("\n".join(all_imports) + "\n"),
+        code_cell("\n".join(all_imports) + "\n", title="Imports"),
     ]
 
     cells.extend(module_cells(module_sources, "src/latent_studio"))
 
     cells.append(markdown_cell(PREFLIGHT_MARKDOWN))
-    cells.append(code_cell(PREFLIGHT))
+    cells.append(code_cell(PREFLIGHT, title="Download the models (optional)"))
 
     cells.append(
         markdown_cell(
@@ -863,7 +870,7 @@ def build_training_notebook() -> dict:
             "steps. Run one artist per pass (see the last section)."
         ),
         markdown_cell("## 1. Install dependencies"),
-        code_cell(TRAINING_PIP_INSTALL),
+        code_cell(TRAINING_PIP_INSTALL, title="Install dependencies"),
         markdown_cell(
             "## 2. Hugging Face setup (required)\n"
             "This notebook **pushes** the trained LoRAs to your account (one repo per "
@@ -880,11 +887,11 @@ def build_training_notebook() -> dict:
             "the left sidebar, 'Notebook access' on). Otherwise this falls back to an "
             "interactive login."
         ),
-        code_cell(HF_SETUP),
+        code_cell(HF_SETUP, title="Hugging Face login"),
         markdown_cell("## 3. Clone the diffusers training script"),
-        code_cell(CLONE_DIFFUSERS),
+        code_cell(CLONE_DIFFUSERS, title="Clone diffusers"),
         markdown_cell("## 4. Imports and Globals"),
-        code_cell("\n".join(all_imports) + "\n"),
+        code_cell("\n".join(all_imports) + "\n", title="Imports"),
     ]
 
     cells.extend(module_cells(module_sources, "training"))
@@ -910,7 +917,8 @@ def build_training_notebook() -> dict:
             "except ModuleNotFoundError:\n"
             '    WORK_DIR = "lora_work"  # not on Colab\n'
             "os.makedirs(WORK_DIR, exist_ok=True)\n"
-            'print("Work dir:", WORK_DIR)'
+            'print("Work dir:", WORK_DIR)',
+            title="Mount Google Drive",
         )
     )
     cells.append(
@@ -929,7 +937,7 @@ def build_training_notebook() -> dict:
             "Afterwards the pipeline reads everything from disk."
         )
     )
-    cells.append(code_cell(TRAINING_PREFLIGHT))
+    cells.append(code_cell(TRAINING_PREFLIGHT, title="Pre-fetch the models"))
     cells.append(
         markdown_cell(
             "## 7. Run the pipeline (one artist per pass)\n"
