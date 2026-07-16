@@ -818,20 +818,21 @@ def build_app_notebook() -> dict:
 
     cells.append(
         markdown_cell(
-            "## Launch the app\nSwitch to a GPU runtime first. **Note:** `share=True` — "
-            "the public share link this produces is the demo route for the live "
-            "presentation; test it before relying on it live. `inbrowser=True` only "
-            "opens a tab automatically on a **local** runtime — on Google's hosted "
-            "runtime (the normal case for the T4 GPU) there's no local browser for it "
-            "to reach, so use the printed share link instead; it's a harmless no-op "
+            "## Launch the app\nSwitch to a GPU runtime first. `share=True` creates a "
+            "public link outside this Colab session — the way to reach the app from "
+            "another device, e.g. for a live demo. Load the printed link once to "
+            "confirm it works before depending on it. `inbrowser=True` only opens a "
+            "tab automatically on a **local** runtime — on Google's hosted runtime "
+            "(the normal case for the T4 GPU) there's no local browser for it to "
+            "reach, so use the printed share link instead; it's a harmless no-op "
             "either way, not an error."
         )
     )
     # Gradio 6 takes theme on launch(), not on the Blocks constructor — THEME is a
-    # module-level name from the app.py section above. share=True for the live demo.
-    # inline=False: don't embed an iframe in the notebook output (Colab's default)
-    # now that a share link exists to click instead. footer_links=[]: no API/Settings
-    # footer.
+    # module-level name from the app.py section above. share=True creates a public
+    # link reachable outside this Colab session. inline=False: don't embed an
+    # iframe in the notebook output (Colab's default) now that a share link exists
+    # to click instead. footer_links=[]: no API/Settings footer.
     cells.append(code_cell(
         "demo = build_app()\n"
         "demo.launch(share=True, theme=THEME, inline=False, inbrowser=True, footer_links=[])"
