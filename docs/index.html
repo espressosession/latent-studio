@@ -128,11 +128,12 @@
   Rembrandt&nbsp;van&nbsp;Rijn (etching) — produced not by
   hand-curated datasets but by an <strong>automated pipeline</strong>: an artist name goes in, a validated,
   published LoRA comes out. Once the pipeline was working, a new style cost about
-  <strong>8&nbsp;minutes of GPU time</strong>, which turned the interesting question from "can we train one?"
-  into "which artists does the data even allow?" — see the findings below.
+  <strong>8&nbsp;minutes of GPU time</strong> at the original fixed step count, which turned the interesting
+  question from "can we train one?" into "which artists does the data even allow?" — see the findings below.
   On top of the core generator, the app offers systematic parameter/seed sweeps for exploration.
   (ControlNet — the brief's optional advanced path — was built but kept secondary to the training
-  pipeline and is disabled in the shipped app; see <a href="#scope">Scope</a>.)
+  pipeline; it now lives behind an experimental, default-off toggle while its Colab reliability is
+  re-verified — see <a href="#scope">Scope</a>.)
 </p>
 
 <h2>The app</h2>
@@ -174,8 +175,11 @@
   runtime</strong>, however, it raises errors that <strong>do not reproduce cleanly</strong>: different runs
   fail differently (a meta-tensor load error, a dtype mismatch, a grid-time exception) and none of them
   surface locally under the same library versions, which points at the runtime/session rather than the logic.
-  Since a demo that fails unpredictably is worse than one feature fewer, ControlNet is <strong>disabled in the
-  shipped app</strong>; the code stays in the repository, and re-enabling it is a post-submission task.
+  Since a demo that fails unpredictably is worse than one feature fewer, ControlNet was kept out of the
+  shipped app. That status is being revisited: the code has since been reverted to an experimental,
+  default-off toggle in the Setup tab for renewed testing on Colab GPU hardware. This section reflects
+  where that investigation stood at the time it was written and will be rewritten once the retest is
+  complete and a final call made on whether ControlNet joins the default experience.
 </p>
 
 <h2>Automated LoRA training pipeline</h2>
@@ -374,7 +378,13 @@
   Not retraining on suspicion was the right first call — but it left the real question unanswered:
   <em>does more data actually make a better style, or does it only feel that way?</em> Guessing wasn't
   good enough, so we retrained <strong>every</strong> style under the corrected pipeline (the 150-image
-  target, training length scaled per image) on Colab, and compared each one before against after. The
+  target, training length scaled per image) on Colab, and compared each one before against after.
+  Scaling training length with the dataset has a compute cost of its own — a 150-image set now runs up
+  to <strong>6,000&nbsp;steps</strong> instead of the original fixed 2,400 — and retraining nine styles at
+  that length inside the deadline is where the free <strong>T4</strong> tier stopped being practical. This
+  retraining pass ran on a faster, paid-tier <strong>L4</strong> GPU instead: the corrected methodology
+  decided <em>what</em> to retrain, but the faster GPU is what made retraining the whole roster
+  <em>feasible</em> at all — time and compute, not just insight, had been the limiting factor. The
   comparison is deliberately held on a <strong>single device</strong>: the same seed produces different
   images on Apple's MPS and Colab's CUDA, so an honest before/after has to keep the GPU fixed. Every
   figure below is CUDA.
