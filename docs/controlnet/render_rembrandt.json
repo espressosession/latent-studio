@@ -1,0 +1,23 @@
+{
+  "prompt": "an old stone watermill beside a rushing stream",
+  "negative_prompt": "blurry, low quality, watermark",
+  "width": 512,
+  "height": 512,
+  "cfg_scale": 7.5,
+  "steps": 30,
+  "seed": 1312,
+  "lora_weight": 1.0,
+  "controlnet_types": [
+    "depth"
+  ],
+  "controlnet_scales": {
+    "depth": 1.0
+  },
+  "checkpoint_id": "sd15-base",
+  "checkpoint_label": "Stable Diffusion 1.5",
+  "lora_id": "rembrandt",
+  "lora_label": "Rembrandt van Rijn",
+  "effective_prompt": "sks, an old stone watermill beside a rushing stream",
+  "device": "mps",
+  "dtype": "float16"
+}

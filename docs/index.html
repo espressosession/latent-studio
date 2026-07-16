@@ -108,7 +108,7 @@
   <li>diffusers</li>
   <li>Gradio</li>
   <li>LoRA</li>
-  <li>ControlNet (explored)</li>
+  <li>ControlNet (experimental)</li>
   <li>fp16 · 512²</li>
 </ul>
 
@@ -561,6 +561,66 @@
   Gradio renders a <em>disabled number field identically to an enabled one</em> — same colour, same opacity,
   only the mouse cursor differs — so greying one is a lie. Number fields don't suffer the mount bug, so those
   are hidden instead. Each mechanism is used where it actually communicates something.
+</p>
+
+<h3>ControlNet, tested locally on Apple Silicon</h3>
+<p>
+  A follow-up once ControlNet's Colab bugs were fixed (see <a href="#scope">Scope</a>): does the same
+  depth-conditioned generation actually hold up end to end, across styles and checkpoints? Rendered entirely
+  locally on Apple Silicon (MPS), not the Colab T4/CUDA the rest of this page uses — treat these as a
+  mechanics check, not a reproducibility reference; the same seed and settings render differently on MPS
+  than on CUDA.
+</p>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+  <figure>
+    <img src="images/controlnet/source.jpg" alt="A plain SD1.5 render of an old stone watermill beside a rushing stream">
+    <figcaption>Plain render <a href="controlnet/source.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/depth-map.jpg" alt="The depth map extracted from the render above via Depth-Anything-V2">
+    <figcaption>Its depth map</figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/render_none.jpg" alt="The depth map re-rendered with no style, SD1.5 base">
+    <figcaption>Re-rendered, no style <a href="controlnet/render_none.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/render_hokusai.jpg" alt="The same depth map re-rendered with the Hokusai style">
+    <figcaption>+ Hokusai <a href="controlnet/render_hokusai.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/render_monet.jpg" alt="The same depth map re-rendered with the Monet style">
+    <figcaption>+ Monet <a href="controlnet/render_monet.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/render_rembrandt.jpg" alt="The same depth map re-rendered with the Rembrandt style">
+    <figcaption>+ Rembrandt <a href="controlnet/render_rembrandt.json">settings</a></figcaption>
+  </figure>
+</div>
+<p>
+  The composition holds across every style — the reference fixes it, the style only repaints the surface,
+  exactly as intended. One thing stood out while comparing them: at the default style strength (1.0), Hokusai
+  barely shows through the depth conditioning — a noticeably higher threshold than the ~0.6–0.8 crossover the
+  plain (non-ControlNet) style-strength sweep documents above. Pushing it to 1.25 brings the print-medium
+  look back clearly:
+</p>
+<div class="gallery" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+  <figure>
+    <img src="images/controlnet/hokusai-strength-1.0.jpg" alt="Hokusai at style strength 1.0 with ControlNet depth conditioning — barely visible">
+    <figcaption>Style strength 1.0 <a href="controlnet/hokusai-strength-1.0.json">settings</a></figcaption>
+  </figure>
+  <figure>
+    <img src="images/controlnet/hokusai-strength-1.25.jpg" alt="Hokusai at style strength 1.25 with ControlNet depth conditioning — clearly a woodblock print">
+    <figcaption>Style strength 1.25 <a href="controlnet/hokusai-strength-1.25.json">settings</a></figcaption>
+  </figure>
+</div>
+<p>
+  ControlNet's structural conditioning appears to compete with the LoRA for influence over the same
+  denoising steps, raising the strength a style needs before it visibly wins — worth keeping in mind if a
+  style looks inert with a reference image active; it may just need a higher number, not a different
+  pipeline. The same depth map also rendered correctly on DreamShaper 8 and epiCRealism, confirming
+  ControlNet's own checkpoint switch works the same way the plain pipeline's does — not the systematic sweep
+  the parameter atlas below is, just a spot check.
 </p>
 
 <h2>Known limitations</h2>
