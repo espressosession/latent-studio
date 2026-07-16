@@ -132,8 +132,8 @@
   question from "can we train one?" into "which artists does the data even allow?" — see the findings below.
   On top of the core generator, the app offers systematic parameter/seed sweeps for exploration.
   (ControlNet — the brief's optional advanced path — was built but kept secondary to the training
-  pipeline; it now lives behind an experimental, default-off toggle while its Colab reliability is
-  re-verified — see <a href="#scope">Scope</a>.)
+  pipeline; it ships as an experimental, opt-in feature tucked under Advanced view rather than
+  part of the default experience — see <a href="#scope">Scope</a>.)
 </p>
 
 <h2>The app</h2>
@@ -169,17 +169,18 @@
   — and every finding on this page — actually lived.
 </p>
 <p>
-  ControlNet <em>was</em> built and is functional: canny and depth conditioning, multi-ControlNet, and
-  combinable with a style LoRA (the reference fixes the composition, the LoRA paints it). In local testing
-  (Apple&nbsp;MPS) it runs cleanly — loading, single images and grids all generate. On the <strong>Colab demo
-  runtime</strong>, however, it raises errors that <strong>do not reproduce cleanly</strong>: different runs
-  fail differently (a meta-tensor load error, a dtype mismatch, a grid-time exception) and none of them
-  surface locally under the same library versions, which points at the runtime/session rather than the logic.
-  Since a demo that fails unpredictably is worse than one feature fewer, ControlNet was kept out of the
-  shipped app. That status is being revisited: the code has since been reverted to an experimental,
-  default-off toggle in the Setup tab for renewed testing on Colab GPU hardware. This section reflects
-  where that investigation stood at the time it was written and will be rewritten once the retest is
-  complete and a final call made on whether ControlNet joins the default experience.
+  ControlNet <em>was</em> built and is functional: canny and depth conditioning, combinable with a style
+  LoRA (the reference fixes the composition, the LoRA paints it). Earlier Colab testing hit failures that
+  looked like runtime flakiness — different runs failing differently, a meta-tensor load error here and a
+  dtype mismatch there, none of it reproducing locally under the same library versions. That diagnosis
+  turned out to be wrong, or at least incomplete: closer investigation on live Colab GPU hardware traced
+  the actual failures to two concrete, fixable bugs rather than an unstable runtime — a race condition in
+  how the pipeline reported its own loaded state to the interface, and a depth-estimation model that was
+  never freed and slowly exhausted system RAM across a session. Both are fixed, and repeated live
+  retesting since — switching checkpoints and reference types back and forth — has run cleanly. It is not
+  yet proven reliable enough to trust as a default, though: ControlNet ships as an <strong>experimental,
+  opt-in feature</strong> tucked under Advanced view rather than the default experience, to be used at
+  your own risk while testing continues. The core generator works fully without it, which is the default.
 </p>
 
 <h2>Automated LoRA training pipeline</h2>
