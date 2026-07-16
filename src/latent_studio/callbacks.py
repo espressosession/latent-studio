@@ -122,14 +122,23 @@ def dim_updates(master_field: str, field: str, reset: bool, gate_field: bool = F
     always stays clickable (gate_field=False, the default) — but the second column only
     makes sense once the first is active, so its own radio greys out too when
     gate_field=True. Start/End grey out when off or when the field is seed (seed has no
-    numeric range, only a count); `reset` re-ranges them (and Steps' ceiling) to the new
-    field's default.
+    numeric range, only a count); `reset` re-ranges Start/End/Steps to the new field's
+    default (range and count both).
 
     `suppress=True` means a restore (Reuse/Import) just set this column's exact values
-    as part of the very same event that changed `field` — this cascade would otherwise
-    fire right after and immediately overwrite them with the field's generic default
-    range. Skip the value reset for that one cycle (interactive state still gets fixed
-    up normally) and clear the flag so the next real field change resets as usual."""
+    — Start/End/Steps alike — as part of the very same event that changed `field`; this
+    cascade would otherwise fire right after and immediately overwrite them with the
+    field's generic default. Skip the *value* reset for that one cycle and clear the flag
+    so the next real field change resets as usual — but still realign every control's
+    minimum/maximum(/step) to the restored field's own spec (never suppressed): each of
+    Start/End/Steps carries its range over from whatever field was active before, and the
+    four fields' ranges genuinely don't nest (lora_weight's floor of 0.0 sits below every
+    other field's minimum; cfg_scale/steps/lora_weight cap Steps at 8 images where seed
+    goes to 25). A restored value landing outside the previous field's leftover range
+    crashes Gradio's own bounds check in preprocess() before on_generate ever runs — only
+    realigning the range here (not widening it to some shared safe superset) fixes that
+    without losing what each field's own range means, both what the Start/End sliders
+    visibly drag across and Steps' per-field image-count ceiling."""
     compare_on = master_field in SWEEP_SPECS
     spec = SWEEP_SPECS.get(field)
     usable = compare_on and spec is not None
@@ -138,10 +147,19 @@ def dim_updates(master_field: str, field: str, reset: bool, gate_field: bool = F
 
     if suppress:
         field_update = gr.update(interactive=compare_on) if gate_field else gr.update()
-        return (
-            field_update, gr.update(interactive=numeric_on), gr.update(interactive=numeric_on),
-            gr.update(interactive=usable), False,
-        )
+        if usable:
+            from_update = gr.update(
+                interactive=numeric_on, minimum=spec.minimum, maximum=spec.maximum, step=spec.step
+            )
+            to_update = gr.update(
+                interactive=numeric_on, minimum=spec.minimum, maximum=spec.maximum, step=spec.step
+            )
+            count_update = gr.update(interactive=usable, maximum=spec.max_count)
+        else:
+            from_update = gr.update(interactive=numeric_on)
+            to_update = gr.update(interactive=numeric_on)
+            count_update = gr.update(interactive=usable)
+        return (field_update, from_update, to_update, count_update, False)
 
     if numeric_on and reset:
         from_update = gr.update(

@@ -117,17 +117,17 @@ class SweepSpec:
 # billions).
 SWEEP_SPECS: dict[str, SweepSpec] = {
     "cfg_scale": SweepSpec(
-        "Prompt strength", 1.0, 20.0, 0.05, 3.0, 15.0, 5, 8,
+        "Prompt strength", 1.0, 20.0, 0.05, 3.0, 15.0, 5, 10,
         "Compares how literally the prompt is taken. Low values drift, high values "
         "get harsh — the useful range to look at is roughly 3 to 15.",
     ),
     "steps": SweepSpec(
-        "Detail", 1, 100, 1, 10, 50, 5, 8,
+        "Detail", 1, 100, 1, 10, 50, 5, 10,
         "Compares how much refinement the image gets. The interesting part is the "
         "low end: the difference between 10 and 30 is large, between 50 and 100 tiny.",
     ),
     "lora_weight": SweepSpec(
-        "Style strength", 0.0, 1.5, 0.05, 0.0, 1.0, 5, 8,
+        "Style strength", 0.0, 1.5, 0.05, 0.0, 1.0, 5, 10,
         "Compares how hard the style is pushed. Sweep 0 → 1 to see it take hold, or "
         "past 1.2 to find the point where it burns.",
     ),

@@ -98,7 +98,7 @@ def _compare_column(heading: str, description: str, choices: list, value: str, s
             _sublabel("Steps")
             count = gr.Number(
                 value=spec.count if spec else 5, precision=0, minimum=2,
-                maximum=spec.max_count if spec else 8, container=False, interactive=False,
+                maximum=spec.max_count if spec else 10, container=False, interactive=False,
             )
     return field, from_slider, to_slider, count
 

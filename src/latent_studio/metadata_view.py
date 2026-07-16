@@ -11,7 +11,7 @@ import time
 
 import gradio as gr
 
-from .design_tokens import HEIGHT, WIDTH
+from .design_tokens import HEIGHT, SWEEP_SPECS, WIDTH
 from .metadata import save_with_metadata
 from .registry import DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID
 
@@ -157,8 +157,19 @@ def metadata_to_control_values(metadata) -> tuple:
         def _u(value):
             return gr.update(value=value) if value is not None else gr.update()
 
-        from1_u, to1_u, count1_u = _u(compare.get("from1")), _u(compare.get("to1")), _u(compare.get("count1"))
-        from2_u, to2_u, count2_u = _u(compare.get("from2")), _u(compare.get("to2")), _u(compare.get("count2"))
+        def _count(value, field):
+            # Clamped to that field's own max_count, not just passed through: this can
+            # come from a hand-edited JSON or an export from an older app version, and
+            # dim_updates() is about to realign the Number's maximum to this same field's
+            # spec right after — an out-of-range value here would crash Gradio's own
+            # bounds check instead of erroring gracefully.
+            field_spec = SWEEP_SPECS.get(field)
+            return None if value is None or field_spec is None else max(2, min(int(value), field_spec.max_count))
+
+        from1_u, to1_u = _u(compare.get("from1")), _u(compare.get("to1"))
+        from2_u, to2_u = _u(compare.get("from2")), _u(compare.get("to2"))
+        count1_u = _u(_count(compare.get("count1"), field1))
+        count2_u = _u(_count(compare.get("count2"), field2))
         suppress1 = suppress2 = True
     else:
         field1 = field2 = "off"
