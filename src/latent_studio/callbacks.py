@@ -15,6 +15,7 @@ from .design_tokens import (
     ASPECT_SIZES,
     MAX_IMAGES,
     MAX_SEED,
+    MAX_UPSCALE_HOPS,
     STATUS_REFERENCE_OFF,
     STATUS_SEED_RANDOM,
     STATUS_STYLE_OFF,
@@ -35,6 +36,7 @@ from .metadata_view import (
     prompt_used_html,
     settings_html,
     square_shape,
+    upscale_hops,
 )
 from .pipeline_manager import PipelineManager, preload_models
 from .progress import ProgressTracker, status_html, track_tqdm
@@ -510,7 +512,7 @@ def on_generate(
     yield (
         metadata, history,
         gr.update(value=history_to_gallery(history), selected_index=0), 0,
-        gr.update(visible=True, interactive=not is_grid(metadata)),
+        gr.update(visible=True, interactive=not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
         gr.update(value=png_path, visible=True), json_path,
         gr.update(interactive=True, value=label()),
         model_status_html(), status_html("check", done),
@@ -545,6 +547,16 @@ def on_upscale(history, selected_index):
     metadata = entry["metadata"]
     if is_grid(metadata):
         yield failed("Upscale works on a single image, not a comparison grid.")
+        return
+    hops = upscale_hops(metadata)
+    if hops >= MAX_UPSCALE_HOPS:
+        # Each hop doubles both dimensions with no natural ceiling — chaining past
+        # MAX_UPSCALE_HOPS is a real, reachable CUDA OOM, not just a theoretical one.
+        times = "once" if hops == 1 else f"{hops} times"
+        yield failed(
+            f"This image has already been upscaled {times} — further upscaling risks "
+            "running out of GPU memory. Pick the original generation instead."
+        )
         return
 
     cell = _cells(metadata)[0]
@@ -594,8 +606,9 @@ def on_upscale(history, selected_index):
     # regeneration at the doubled size — the nested block mirrors how a Compare grid
     # carries its own "compare" block alongside "cells".
     new_metadata = dict(cell)
+    new_hop = hops + 1
     new_metadata["upscale"] = {
-        "model": UPSCALER_REPO, "scale": 2,
+        "model": UPSCALER_REPO, "scale": 2 ** new_hop, "hop": new_hop,
         "width": upscaled_image.width, "height": upscaled_image.height,
     }
     new_entry = {"image": upscaled_image, "metadata": new_metadata, "created_at": time.time()}
@@ -619,7 +632,8 @@ def on_gallery_select(evt: gr.SelectData, history):
     png_path, json_path = _prepare_download_files(entry)
     metadata = entry["metadata"]
     return (
-        metadata, evt.index, gr.update(interactive=not is_grid(metadata)),
+        metadata, evt.index,
+        gr.update(interactive=not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
         gr.update(value=png_path, visible=True), json_path,
         prompt_used_html(metadata), settings_html(metadata),
     )

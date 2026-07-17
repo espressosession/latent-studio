@@ -56,6 +56,19 @@ def is_grid(metadata) -> bool:
     return len(_cells(metadata)) > 1
 
 
+def upscale_hops(metadata) -> int:
+    """How many times this history entry has already been through Upscale (0 for a
+    plain generation) — gates the button against unbounded chaining. Each hop doubles
+    both dimensions, so VRAM for the upscaler's own attention/conv activations blows
+    up fast; MAX_UPSCALE_HOPS (design_tokens) is the confirmed-safe ceiling, found
+    after a real CUDA OOM chaining past it."""
+    cells = _cells(metadata)
+    if not cells:
+        return 0
+    upscale = cells[0].get("upscale")
+    return upscale.get("hop", 1) if upscale else 0
+
+
 def effective_prompt_of(metadata) -> str:
     cells = _cells(metadata)
     if not cells:

@@ -9,6 +9,9 @@ import gradio as gr
 WIDTH = HEIGHT = 512
 MAX_SEED = 2**32 - 1
 MAX_IMAGES = 100  # a comparison beyond this is a runaway, not a study
+# 2 hops from a 768px-edge landscape/portrait base tops out around 3072px — confirmed
+# working on a T4; a 3rd hop (~6144px) is what actually hit a real CUDA OOM.
+MAX_UPSCALE_HOPS = 2
 
 # Curated, proven-safe SD1.5 sizes (512-768 per side) — id-based like checkpoint/lora
 # choices, not a tuple-valued Radio, so ASPECT_SIZES is the one place width/height
