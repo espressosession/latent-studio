@@ -29,6 +29,9 @@ _MARKUP: dict[str, str] = {
         '<circle cx="15.5" cy="15.5" r="1.3" fill="{c}" stroke="none"/>'
     ),
     "check":'<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+    "expand": (
+        '<path d="M8 3H3v5"/><path d="M16 3h5v5"/><path d="M21 16v5h-5"/><path d="M3 16v5h5"/>'
+    ),
     "alert": (
         '<path d="M10.3 4.3 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z"/>'
         '<path d="M12 9.5v4"/><path d="M12 17h.01"/>'

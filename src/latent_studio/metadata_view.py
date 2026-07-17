@@ -11,7 +11,7 @@ import time
 
 import gradio as gr
 
-from .design_tokens import HEIGHT, SWEEP_SPECS, WIDTH
+from .design_tokens import ASPECT_SIZES, DEFAULT_ASPECT_ID, HEIGHT, SWEEP_SPECS, WIDTH
 from .metadata import save_with_metadata
 from .registry import CHECKPOINTS, DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID, LORAS
 
@@ -48,6 +48,12 @@ def _compare_spec(metadata) -> dict | None:
     if isinstance(metadata, dict) and "compare" in metadata:
         return metadata["compare"]
     return None
+
+
+def is_grid(metadata) -> bool:
+    """Whether this history entry is a Compare grid (multiple cells) rather than a
+    single image — gates the Upscale button, which only makes sense on one image."""
+    return len(_cells(metadata)) > 1
 
 
 def effective_prompt_of(metadata) -> str:
@@ -91,6 +97,9 @@ def settings_rows(metadata) -> list[tuple[str, str]]:
         value = "varies across the grid" if varies else first[key]
         rows.append((label, str(value) if str(value).strip() else "—"))
     rows.append(("Size", f"{first.get('width', WIDTH)} × {first.get('height', HEIGHT)}"))
+    upscale = first.get("upscale")
+    if upscale:
+        rows.append(("Upscaled to", f"{upscale['width']} × {upscale['height']} ({upscale['scale']}x)"))
     if first.get("controlnet_types"):
         rows.append(("Reference", ", ".join(first["controlnet_types"])))
         rows.append(("Reference strength", str(first.get("controlnet_scales", {}))))
@@ -128,7 +137,8 @@ def metadata_to_control_values(metadata) -> tuple:
     """Metadata dict -> the control values for "reuse these settings" (also used by
     Import). ControlNet collapses back to its single-select value; the seed mode
     switches to Fixed so reusing settings and then rolling Random can't silently change
-    the seed.
+    the seed. width/height reverse-lookup into the aspect-ratio radio (falling back to
+    square for any size outside the three curated shapes, e.g. an Upscale result).
 
     Compare's field1/field2/Start/End/Steps are restored too, from the "compare" block
     a grid export now carries (see callbacks.on_generate) — the exact sweep config used
@@ -161,6 +171,12 @@ def metadata_to_control_values(metadata) -> tuple:
     lora_id = first.get("lora_id", DEFAULT_LORA_ID)
     if lora_id not in {lora.id for lora in LORAS}:
         lora_id = DEFAULT_LORA_ID
+
+    # Reverse-lookup into the three curated shapes; falls back the same way as the
+    # checkpoint/lora ids above for any size that isn't one of them — notably an
+    # Upscale result, which is deliberately not one of the three (see callbacks.on_upscale).
+    size = (first.get("width", WIDTH), first.get("height", HEIGHT))
+    aspect_id = next((aid for aid, s in ASPECT_SIZES.items() if s == size), DEFAULT_ASPECT_ID)
 
     compare = _compare_spec(metadata)
     if compare:
@@ -195,6 +211,7 @@ def metadata_to_control_values(metadata) -> tuple:
     return (
         checkpoint_id,
         lora_id,
+        aspect_id,
         first.get("lora_weight", 1.0),
         first.get("prompt", ""),
         first.get("negative_prompt", ""),

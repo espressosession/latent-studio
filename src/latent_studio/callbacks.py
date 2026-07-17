@@ -12,7 +12,7 @@ import gradio as gr
 
 from .controlnet import ControlNetManager, canny_preprocess, depth_preprocess
 from .design_tokens import (
-    HEIGHT,
+    ASPECT_SIZES,
     MAX_IMAGES,
     MAX_SEED,
     STATUS_REFERENCE_OFF,
@@ -20,7 +20,6 @@ from .design_tokens import (
     STATUS_STYLE_OFF,
     STATUS_SWEPT,
     SWEEP_SPECS,
-    WIDTH,
 )
 from .generation import GenerationParams, generate
 from .grids import sweep
@@ -28,8 +27,10 @@ from .metadata import read_metadata
 from .metadata_view import (
     _cells,
     _prepare_download_files,
+    effective_prompt_of,
     history_to_gallery,
     import_warnings,
+    is_grid,
     metadata_to_control_values,
     prompt_used_html,
     settings_html,
@@ -38,13 +39,15 @@ from .metadata_view import (
 from .pipeline_manager import PipelineManager, preload_models
 from .progress import ProgressTracker, status_html, track_tqdm
 from .registry import get_checkpoint, get_lora
+from .upscaler import UPSCALER_REPO, UpscalerManager
 
 manager = PipelineManager()
 controlnet_manager = ControlNetManager()
+upscaler_manager = UpscalerManager()
 
-# checkpoint/lora/weight/prompt/negative/cfg/steps/seed_mode/seed/controlnet/
+# checkpoint/lora/aspect/weight/prompt/negative/cfg/steps/seed_mode/seed/controlnet/
 # controlnet_scale/field1/from1/to1/count1/field2/from2/to2/count2/suppress1/suppress2
-APPLY_OUTPUT_COUNT = 21
+APPLY_OUTPUT_COUNT = 22
 
 
 def model_status_html() -> str:
@@ -52,6 +55,8 @@ def model_status_html() -> str:
         return status_html("check", f"Loaded: {get_checkpoint(manager.checkpoint_id).label}")
     if controlnet_manager.is_ready:
         return status_html("check", f"Loaded: {get_checkpoint(controlnet_manager.checkpoint_id).label} + reference")
+    if upscaler_manager.is_ready:
+        return status_html("check", "Loaded: Upscaler (2x)")
     return status_html("alert", "No model loaded yet — the first Generate loads one.")
 
 
@@ -309,8 +314,8 @@ def on_import_settings(file):
         return
 
     values = metadata_to_control_values(metadata)
-    checkpoint_id, lora_id, field1, field2 = values[0], values[1], values[11], values[15]
-    count1, count2 = values[14].get("value", 1), values[18].get("value", 1)
+    checkpoint_id, lora_id, field1, field2 = values[0], values[1], values[12], values[16]
+    count1, count2 = values[15].get("value", 1), values[19].get("value", 1)
     total = image_count(field1, count1, field2, count2)
 
     warnings = import_warnings(metadata)
@@ -329,6 +334,7 @@ def on_import_settings(file):
 def on_generate(
     checkpoint_id,
     lora_id,
+    aspect_id,
     prompt,
     negative_prompt,
     cfg_scale,
@@ -355,7 +361,7 @@ def on_generate(
 
     def frozen(state_html):
         return (
-            gr.update(), history, gr.update(), gr.update(), gr.update(), gr.update(),
+            gr.update(), history, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
             gr.update(interactive=True, value=label()),
             model_status_html(), state_html, gr.update(), gr.update(), gr.update(),
         )
@@ -396,11 +402,12 @@ def on_generate(
             return ("seed", (used_seed, 1), int(count))
         return (field, (float(from_value), float(to_value)), int(count))
 
+    width, height = ASPECT_SIZES[aspect_id]
     base_params = GenerationParams(
         prompt=prompt.strip(),
         negative_prompt=negative_prompt.strip(),
-        width=WIDTH,
-        height=HEIGHT,
+        width=width,
+        height=height,
         cfg_scale=cfg_scale,
         steps=int(steps),
         seed=used_seed,
@@ -481,7 +488,7 @@ def on_generate(
     worker.start()
     while worker.is_alive():
         yield (
-            gr.update(), history, gr.update(), gr.update(), gr.update(), gr.update(),
+            gr.update(), history, gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
             gr.update(interactive=False, value=tracker.button),
             model_status_html(), tracker.html(), gr.update(), gr.update(), gr.update(),
         )
@@ -503,11 +510,105 @@ def on_generate(
     yield (
         metadata, history,
         gr.update(value=history_to_gallery(history), selected_index=0), 0,
+        gr.update(visible=True, interactive=not is_grid(metadata)),
         gr.update(value=png_path, visible=True), json_path,
         gr.update(interactive=True, value=label()),
         model_status_html(), status_html("check", done),
         prompt_used_html(metadata), settings_html(metadata),
         gr.update(value=used_seed),
+    )
+
+
+def on_upscale(history, selected_index):
+    """Runs the currently selected single image through the 2x latent upscaler
+    (UpscalerManager) and pushes the result as a new history entry — the original
+    stays untouched. is_grid() is the same guard the button's own `interactive`
+    wiring uses; checked again here since a click shouldn't be trusted to always
+    arrive after the UI has caught up (see on_generate's identical shape)."""
+
+    def frozen(state_html):
+        return (
+            gr.update(), history, gr.update(), gr.update(),
+            gr.update(interactive=True),
+            gr.update(), gr.update(),
+            model_status_html(), state_html, gr.update(), gr.update(),
+        )
+
+    def failed(message):
+        return frozen(status_html("alert", message))
+
+    if not history:
+        yield failed("Generate an image first.")
+        return
+
+    entry = history[selected_index]
+    metadata = entry["metadata"]
+    if is_grid(metadata):
+        yield failed("Upscale works on a single image, not a comparison grid.")
+        return
+
+    cell = _cells(metadata)[0]
+    prompt = effective_prompt_of(metadata)
+    seed = cell.get("seed", 0)
+    image = entry["image"]
+
+    tracker = ProgressTracker()
+    outcome: dict = {}
+
+    def work():
+        try:
+            with track_tqdm(tracker):
+                # Only one full pipeline stays resident — same VRAM discipline as the
+                # ControlNet/plain swap in on_generate's own work().
+                if manager.is_ready:
+                    manager.unload()
+                if controlnet_manager.is_ready:
+                    controlnet_manager.unload()
+                if not upscaler_manager.is_ready:
+                    tracker.set_phase("Loading the upscaler…", "Loading model…")
+                    upscaler_manager.load(on_status=_tracker_status(tracker))
+                tracker.set_phase("Upscaling…", "Upscaling…")
+                outcome["image"] = upscaler_manager.upscale(image, prompt, seed)
+        except Exception as exc:  # noqa: BLE001 — every failure belongs in the panel
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=work, daemon=True)
+    worker.start()
+    while worker.is_alive():
+        yield (
+            gr.update(), history, gr.update(), gr.update(),
+            gr.update(interactive=False, value=tracker.button),
+            gr.update(), gr.update(),
+            model_status_html(), tracker.html(), gr.update(), gr.update(),
+        )
+        time.sleep(0.2)
+    worker.join()
+
+    if "error" in outcome:
+        yield failed(str(outcome["error"]))
+        return
+
+    upscaled_image = outcome["image"]
+    # Every original key (prompt, seed, checkpoint, ...) stays untouched, so "Reuse
+    # these settings" on this entry still reproduces the base generation, not a
+    # regeneration at the doubled size — the nested block mirrors how a Compare grid
+    # carries its own "compare" block alongside "cells".
+    new_metadata = dict(cell)
+    new_metadata["upscale"] = {
+        "model": UPSCALER_REPO, "scale": 2,
+        "width": upscaled_image.width, "height": upscaled_image.height,
+    }
+    new_entry = {"image": upscaled_image, "metadata": new_metadata, "created_at": time.time()}
+    history = [new_entry] + history
+    png_path, json_path = _prepare_download_files(new_entry)
+
+    yield (
+        new_metadata, history,
+        gr.update(value=history_to_gallery(history), selected_index=0), 0,
+        gr.update(interactive=True),
+        gr.update(value=png_path, visible=True), json_path,
+        model_status_html(), status_html("check", "Done — upscaled 2x"),
+        prompt_used_html(new_metadata), settings_html(new_metadata),
     )
 
 
@@ -518,6 +619,7 @@ def on_gallery_select(evt: gr.SelectData, history):
     png_path, json_path = _prepare_download_files(entry)
     metadata = entry["metadata"]
     return (
-        metadata, evt.index, gr.update(value=png_path, visible=True), json_path,
+        metadata, evt.index, gr.update(interactive=not is_grid(metadata)),
+        gr.update(value=png_path, visible=True), json_path,
         prompt_used_html(metadata), settings_html(metadata),
     )

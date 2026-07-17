@@ -10,6 +10,13 @@ WIDTH = HEIGHT = 512
 MAX_SEED = 2**32 - 1
 MAX_IMAGES = 100  # a comparison beyond this is a runaway, not a study
 
+# Curated, proven-safe SD1.5 sizes (512-768 per side) — id-based like checkpoint/lora
+# choices, not a tuple-valued Radio, so ASPECT_SIZES is the one place width/height
+# actually live.
+ASPECT_RATIOS = [("Square", "square"), ("Portrait", "portrait"), ("Landscape", "landscape")]
+ASPECT_SIZES = {"square": (512, 512), "portrait": (512, 768), "landscape": (768, 512)}
+DEFAULT_ASPECT_ID = "square"
+
 # The Prompt box starts pre-filled with a random example. Content only, no medium/
 # style words (no "35mm film", "painterly", "cyberpunk") — a style LoRA supplies the
 # look, so the wording is chosen to give it clean subjects to work with.
@@ -40,6 +47,10 @@ DESC_PROMPT = "What should be in the picture. Naming a subject, a light and a lo
 DESC_AVOID = (
     "Anything to keep out of the picture — leave it empty if nothing bothers you. "
     "(This is the negative prompt.)"
+)
+DESC_ASPECT = (
+    "The picture's shape. Square is the model's native training shape; portrait and landscape "
+    "stay within the same safe range — going wider still is what the Upscale button is for."
 )
 DESC_MODEL = (
     "The engine that paints. **Stable Diffusion 1.5** is the plain original, a neutral "

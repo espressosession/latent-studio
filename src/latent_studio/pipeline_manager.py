@@ -8,11 +8,12 @@ import shutil
 from typing import Callable
 
 import torch
-from diffusers import StableDiffusionPipeline
+from diffusers import DiffusionPipeline, StableDiffusionPipeline
 from huggingface_hub import hf_hub_download
 
 from .device import empty_cache, get_device, get_dtype
 from .registry import CHECKPOINTS, LORAS, get_checkpoint, get_lora
+from .upscaler import UPSCALER_REPO
 
 StatusCallback = Callable[[str], None] | None
 
@@ -30,8 +31,9 @@ def _noop(_: str) -> None:
 
 
 def preload_models(on_status: StatusCallback = None) -> None:
-    """Downloads every checkpoint + LoRA into the local cache without loading any
-    into VRAM, so a live demo's first model switch isn't network-bound."""
+    """Downloads every checkpoint + LoRA + the upscaler into the local cache without
+    loading any into VRAM, so a live demo's first model switch — or first Upscale
+    click — isn't network-bound."""
     on_status = on_status or _noop
     for cp in CHECKPOINTS:
         on_status(f"Fetching {cp.label}…")
@@ -40,6 +42,11 @@ def preload_models(on_status: StatusCallback = None) -> None:
             StableDiffusionPipeline.download(cp.repo_id, variant="fp16", use_safetensors=True)
         except Exception:
             StableDiffusionPipeline.download(cp.repo_id, use_safetensors=True)
+    on_status("Fetching the upscaler…")
+    try:
+        DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True)
+    except Exception:
+        DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True)
     os.makedirs(APP_LORAS_DIR, exist_ok=True)
     for lora in LORAS:
         if lora.path is None:

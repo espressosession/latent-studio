@@ -26,10 +26,14 @@ from .callbacks import (
     on_preload,
     on_preprocess,
     on_randomize_seed,
+    on_upscale,
 )
 from .design_tokens import (
+    ASPECT_RATIOS,
     CONTROLNET_CHOICES,
+    DEFAULT_ASPECT_ID,
     DESC_ADVANCED,
+    DESC_ASPECT,
     DESC_AVOID,
     DESC_CFG,
     DESC_COMPARE,
@@ -146,6 +150,10 @@ def build_app() -> gr.Blocks:
                     placeholder="e.g. blurry, low quality, text…",
                     lines=2,
                 )
+                _heading("Shape", DESC_ASPECT)
+                aspect_radio = gr.Radio(
+                    choices=ASPECT_RATIOS, value=DEFAULT_ASPECT_ID, container=False, info="",
+                )
                 generate_button = gr.Button(
                     generate_button_label(DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID),
                     variant="primary",
@@ -188,6 +196,9 @@ def build_app() -> gr.Blocks:
                         "Import", size="sm", icon=button_icon("upload"), file_types=[".json", ".png"],
                     )
                     export_button = gr.DownloadButton("Export", size="sm", icon=button_icon("download"))
+                upscale_button = gr.Button(
+                    "Upscale", size="sm", icon=button_icon("expand"), visible=False
+                )
                 download_image_button = gr.DownloadButton(
                     "Download image", size="sm", icon=button_icon("download"), visible=False
                 )
@@ -324,7 +335,7 @@ def build_app() -> gr.Blocks:
         # suppress flags ride along so the field-radio's own re-ranging cascade doesn't
         # immediately clobber the values just restored in this same update.
         apply_outputs = [
-            checkpoint_radio, lora_radio, lora_weight_slider, prompt_input, negative_prompt_input,
+            checkpoint_radio, lora_radio, aspect_radio, lora_weight_slider, prompt_input, negative_prompt_input,
             cfg_slider, steps_slider, seed_mode, seed_input, controlnet_select, controlnet_scale,
             field1, from1, to1, count1, field2, from2, to2, count2,
             suppress1_state, suppress2_state,
@@ -389,7 +400,7 @@ def build_app() -> gr.Blocks:
         generate_button.click(
             on_generate,
             inputs=[
-                checkpoint_radio, lora_radio, prompt_input, negative_prompt_input,
+                checkpoint_radio, lora_radio, aspect_radio, prompt_input, negative_prompt_input,
                 cfg_slider, steps_slider, seed_mode, seed_input, lora_weight_slider,
                 advanced_toggle, controlnet_select, controlnet_preview, controlnet_scale,
                 field1, from1, to1, count1,
@@ -398,7 +409,7 @@ def build_app() -> gr.Blocks:
             ],
             outputs=[
                 metadata_state, history_state, history_gallery, selected_index_state,
-                download_image_button, export_button,
+                upscale_button, download_image_button, export_button,
                 generate_button, model_status, state_info,
                 prompt_used, settings_view, seed_input,
             ],
@@ -407,10 +418,19 @@ def build_app() -> gr.Blocks:
         history_gallery.select(
             on_gallery_select, inputs=history_state,
             outputs=[
-                metadata_state, selected_index_state, download_image_button, export_button,
+                metadata_state, selected_index_state, upscale_button, download_image_button, export_button,
                 prompt_used, settings_view,
             ],
             show_progress="hidden",
+        )
+        upscale_button.click(
+            on_upscale, inputs=[history_state, selected_index_state],
+            outputs=[
+                metadata_state, history_state, history_gallery, selected_index_state,
+                upscale_button, download_image_button, export_button,
+                model_status, state_info, prompt_used, settings_view,
+            ],
+            show_progress="hidden",  # the state panel draws its own bars
         )
         apply_settings_button.click(
             metadata_to_control_values, inputs=metadata_state, outputs=apply_outputs, show_progress="hidden"

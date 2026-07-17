@@ -42,6 +42,17 @@ APP_MODULE_FILES = [
         "Apple Silicon (MPS) during local development. Nothing here needs tweaking.",
     ),
     (
+        "upscaler.py",
+        "Upscaler (optional)",
+        "A 2x latent upscaler (`stabilityai/sd-x2-latent-upscaler`, via diffusers' "
+        "`StableDiffusionLatentUpscalePipeline`) for the app's Advanced-only Upscale "
+        "button — deliberately not `StableDiffusionImg2ImgPipeline` cranked to a "
+        "larger width/height, which is where SD1.5 starts duplicating anatomy/"
+        "composition well before 1024px. Defined here, ahead of `pipeline_manager.py`, "
+        "only because that module's `preload_models()` below references "
+        "`UPSCALER_REPO` to warm this model's cache too.",
+    ),
+    (
         "registry.py",
         "Model & LoRA registry",
         "The single source of truth for what shows up in the app's Model and Style "
@@ -565,6 +576,16 @@ _PREFLIGHT_BODY = (
     "for cp in CHECKPOINTS:\n"
     '    print(f"Fetching {cp.label}...")\n'
     "    fetch_checkpoint(cp)\n"
+    "\n"
+    'print("Fetching the upscaler...")\n'
+    "try:\n"
+    "    fetch(\n"
+    '        "Upscaler",\n'
+    '        lambda: DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True),\n'
+    "    )\n"
+    "except Exception:\n"
+    '    print("  Upscaler: no fp16 build, fetching full weights...")\n'
+    '    fetch("Upscaler", lambda: DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True))\n'
     "\n"
     "os.makedirs(APP_LORAS_DIR, exist_ok=True)\n"
     "for lora in LORAS:\n"
