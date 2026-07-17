@@ -6,6 +6,7 @@ import threading
 import time
 from contextlib import contextmanager
 
+from tqdm.auto import tqdm as _auto_tqdm
 from tqdm.std import tqdm as _std_tqdm
 
 from .icons import svg
@@ -148,29 +149,43 @@ class ProgressTracker:
 
 @contextmanager
 def track_tqdm(tracker: ProgressTracker):
-    """Routes every tqdm bar created while this is active into `tracker`, by
-    patching the shared tqdm base class (global, but the app is single-user)."""
-    original = (_std_tqdm.__init__, _std_tqdm.update, _std_tqdm.close)
+    """Routes every tqdm bar created while this is active into `tracker`, by patching
+    every distinct tqdm class actually in play (global, but the app is single-user).
+    `tqdm.std.tqdm` alone isn't enough: diffusers and huggingface_hub both create
+    their bars via `from tqdm.auto import tqdm`, which resolves to
+    `tqdm.notebook.tqdm_notebook` — a different class with its own update()/close()
+    overrides — inside a real Jupyter/Colab kernel with ipywidgets available. Patching
+    is deduped by identity, so a plain terminal/script run (where tqdm.auto *is*
+    tqdm.std) still only patches the one class once."""
+    classes = {_std_tqdm, _auto_tqdm}
+    originals = {cls: (cls.__init__, cls.update, cls.close) for cls in classes}
 
-    def patched_init(self, *args, **kwargs):
-        original[0](self, *args, **kwargs)
-        if not getattr(self, "disable", False):
-            tracker.bar_open(
-                id(self), self.total, getattr(self, "desc", "") or "", getattr(self, "unit", "it")
-            )
+    def make_patches(cls):
+        original_init, original_update, original_close = originals[cls]
 
-    def patched_update(self, n=1):
-        result = original[1](self, n)
-        if not getattr(self, "disable", False):
-            tracker.bar_update(id(self), self.n, self.total)
-        return result
+        def patched_init(self, *args, **kwargs):
+            original_init(self, *args, **kwargs)
+            if not getattr(self, "disable", False):
+                tracker.bar_open(
+                    id(self), self.total, getattr(self, "desc", "") or "", getattr(self, "unit", "it")
+                )
 
-    def patched_close(self):
-        tracker.bar_close(id(self))
-        return original[2](self)
+        def patched_update(self, n=1):
+            result = original_update(self, n)
+            if not getattr(self, "disable", False):
+                tracker.bar_update(id(self), self.n, self.total)
+            return result
 
-    _std_tqdm.__init__, _std_tqdm.update, _std_tqdm.close = patched_init, patched_update, patched_close
+        def patched_close(self):
+            tracker.bar_close(id(self))
+            return original_close(self)
+
+        return patched_init, patched_update, patched_close
+
+    for cls in classes:
+        cls.__init__, cls.update, cls.close = make_patches(cls)
     try:
         yield tracker
     finally:
-        _std_tqdm.__init__, _std_tqdm.update, _std_tqdm.close = original
+        for cls, (init, update, close) in originals.items():
+            cls.__init__, cls.update, cls.close = init, update, close
