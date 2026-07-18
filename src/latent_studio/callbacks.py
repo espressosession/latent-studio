@@ -16,6 +16,7 @@ from .design_tokens import (
     MAX_IMAGES,
     MAX_SEED,
     MAX_UPSCALE_HOPS,
+    STATUS_ASPECT_SQUARE_ONLY,
     STATUS_REFERENCE_OFF,
     STATUS_SEED_RANDOM,
     STATUS_STYLE_OFF,
@@ -41,7 +42,7 @@ from .metadata_view import (
 from .pipeline_manager import PipelineManager, preload_models
 from .progress import ProgressTracker, status_html, track_tqdm
 from .registry import get_checkpoint, get_lora
-from .upscaler import UPSCALER_REPO, UpscalerManager
+from .upscaler import UPSCALER_REPO, UPSCALING_ENABLED, UpscalerManager
 
 manager = PipelineManager()
 controlnet_manager = ControlNetManager()
@@ -210,6 +211,26 @@ def image_count(field1, count1, field2, count2) -> int:
 def on_button_label_change(checkpoint_id, lora_id, field1, count1, field2, count2):
     count = image_count(field1, count1, field2, count2)
     return gr.update(value=generate_button_label(checkpoint_id, lora_id, count))
+
+
+def on_checkpoint_change(checkpoint_id: str):
+    """Model switch is already an expensive, everything-reloads action, so it also
+    snaps Shape/Prompt strength/Detail to the new checkpoint's own recommended
+    starting point (registry.Checkpoint) rather than leaving the previous model's
+    tuning in place. Shape additionally locks to Square for a checkpoint that
+    doesn't support non-square (SD1.5 base degrades badly off it) — forced back to
+    "square" here rather than just greyed out, so the value itself can never end up
+    stuck on portrait/landscape underneath a disabled control."""
+    checkpoint = get_checkpoint(checkpoint_id)
+    square_only = not checkpoint.supports_non_square
+    aspect_kwargs = {"interactive": not square_only, "info": STATUS_ASPECT_SQUARE_ONLY if square_only else ""}
+    if square_only:
+        aspect_kwargs["value"] = "square"
+    return (
+        gr.update(**aspect_kwargs),
+        gr.update(value=checkpoint.default_cfg),
+        gr.update(value=checkpoint.default_steps),
+    )
 
 
 def on_randomize_seed():
@@ -512,7 +533,10 @@ def on_generate(
     yield (
         metadata, history,
         gr.update(value=history_to_gallery(history), selected_index=0), 0,
-        gr.update(visible=True, interactive=not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
+        gr.update(
+            visible=UPSCALING_ENABLED,
+            interactive=UPSCALING_ENABLED and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS,
+        ),
         gr.update(value=png_path, visible=True), json_path,
         gr.update(interactive=True, value=label()),
         model_status_html(), status_html("check", done),
@@ -633,7 +657,7 @@ def on_gallery_select(evt: gr.SelectData, history):
     metadata = entry["metadata"]
     return (
         metadata, evt.index,
-        gr.update(interactive=not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
+        gr.update(interactive=UPSCALING_ENABLED and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
         gr.update(value=png_path, visible=True), json_path,
         prompt_used_html(metadata), settings_html(metadata),
     )

@@ -13,7 +13,7 @@ from huggingface_hub import hf_hub_download
 
 from .device import empty_cache, get_device, get_dtype
 from .registry import CHECKPOINTS, LORAS, get_checkpoint, get_lora
-from .upscaler import UPSCALER_REPO
+from .upscaler import UPSCALER_REPO, UPSCALING_ENABLED
 
 StatusCallback = Callable[[str], None] | None
 
@@ -42,11 +42,12 @@ def preload_models(on_status: StatusCallback = None) -> None:
             StableDiffusionPipeline.download(cp.repo_id, variant="fp16", use_safetensors=True)
         except Exception:
             StableDiffusionPipeline.download(cp.repo_id, use_safetensors=True)
-    on_status("Fetching the upscaler…")
-    try:
-        DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True)
-    except Exception:
-        DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True)
+    if UPSCALING_ENABLED:
+        on_status("Fetching the upscaler…")
+        try:
+            DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True)
+        except Exception:
+            DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True)
     os.makedirs(APP_LORAS_DIR, exist_ok=True)
     for lora in LORAS:
         if lora.path is None:

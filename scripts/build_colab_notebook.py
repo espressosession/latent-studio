@@ -50,14 +50,22 @@ APP_MODULE_FILES = [
         "larger width/height, which is where SD1.5 starts duplicating anatomy/"
         "composition well before 1024px. Defined here, ahead of `pipeline_manager.py`, "
         "only because that module's `preload_models()` below references "
-        "`UPSCALER_REPO` to warm this model's cache too.",
+        "`UPSCALER_REPO` to warm this model's cache too. **`UPSCALING_ENABLED`** reads "
+        "the `ENABLE_UPSCALING` env var set by the **Settings** section at the very "
+        "top of this notebook (\"Activate Upscaling Pipeline (Experimental)\") — off by "
+        "default everywhere, including local development: it's still rough-edged "
+        "enough that the Upscale button itself is labelled \"(Experimental)\".",
     ),
     (
         "registry.py",
         "Model & LoRA registry",
         "The single source of truth for what shows up in the app's Model and Style "
         "pickers. **Tweak `CHECKPOINTS`** to add/remove curated SD1.5 checkpoints "
-        "(any Hugging Face repo compatible with `StableDiffusionPipeline`). **`LORAS`** "
+        "(any Hugging Face repo compatible with `StableDiffusionPipeline`) — each one "
+        "also carries its own recommended `default_cfg`/`default_steps` (the app snaps "
+        "to these whenever the Model radio switches) and `supports_non_square` (locks "
+        "the Shape control to Square for a checkpoint that degrades off it, currently "
+        "just plain SD1.5). **`LORAS`** "
         "points at the six shipped project LoRAs (Hokusai, Turner, Monet, Dürer, "
         "Hiroshige, Rembrandt) by their Hugging Face repo "
         "id — those are produced by the separate LoRA training notebook "
@@ -72,10 +80,12 @@ APP_MODULE_FILES = [
         "operation — it fully reloads and frees the old pipeline's memory first. "
         "Switching **which LoRA** is loaded is cheaper; changing only the LoRA "
         "**weight** (strength) is free — it's applied per-generation instead of "
-        "reloading anything. **Tweak:** `DISABLE_SAFETY_CHECKER` is a local-only debug "
-        "escape hatch — set it before importing this module to skip the safety checker "
-        "while iterating offline. This notebook never sets it: the deployed app always "
-        "runs with the safety checker enabled.",
+        "reloading anything. **Tweak:** `_SAFETY_CHECKER_DISABLED` reads the "
+        "`DISABLE_SAFETY_CHECKER` env var set by the **Settings** section at the very "
+        "top of this notebook — off by default there too, so the safety checker stays "
+        "enabled unless that toggle is deliberately switched on. **Leave it off for "
+        "the graded/public app** — the brief requires the safety checker enabled in "
+        "the public-facing app; this exists only as a local-debugging escape hatch.",
     ),
     (
         "controlnet.py",
@@ -477,8 +487,48 @@ APP_PIP_INSTALL = (
     + DROP_TORCHAO
 )
 
+# Every experimental/opt-in toggle lives in one place, at the very top of the
+# notebook, as plain Colab form checkboxes — flip one and re-run this single cell
+# rather than hunting through the document for where a feature is switched on. All
+# three read False here (see each one's own reasoning further down, where its logic
+# actually runs): this is a deliberate list, not just RUN_PREFLIGHT's old spot —
+# future experimental features should be added here first, before they're wired in
+# anywhere else.
+SETTINGS_MARKDOWN = (
+    "## 1. Settings — experimental features (all off by default)\n"
+    "One checkbox per opt-in feature, gathered here instead of scattered through the "
+    "notebook. Flip one, then re-run this cell (Runtime menu, or click it) before "
+    "continuing — the sections below read whatever these are set to.\n\n"
+    "- **Cache models before starting** — pre-fetches every checkpoint/style now "
+    "instead of on first use in the app. Off by default: the app already downloads "
+    "lazily with its own loading animation; see the reasoning in section 6.\n"
+    "- **Activate Upscaling Pipeline (Experimental)** — turns on the Advanced-only 2x "
+    "Upscale button (also labelled \"(Experimental)\" in the app itself). Off by "
+    "default everywhere, including local development — it's a newer feature that "
+    "still needs some tweaking.\n"
+    "- **Disable Safety Checker** — a local-debugging escape hatch, nothing more. "
+    "**Leave this off** for the graded/public run — the brief requires the safety "
+    "checker enabled in the public-facing app."
+)
+SETTINGS = (
+    "import os\n"
+    "\n"
+    'CACHE_MODELS_BEFORE_STARTING = False  # @param {type:"boolean"}\n'
+    'ENABLE_UPSCALING = False  # @param {type:"boolean"}\n'
+    'DISABLE_SAFETY_CHECKER = False  # @param {type:"boolean"}\n'
+    "\n"
+    "# Both read as plain env vars further down (pipeline_manager.py / upscaler.py) —\n"
+    "# only set when true, never to a falsy-looking string: os.environ.get(...) is\n"
+    '# truthy for ANY non-empty string, "0" included.\n'
+    "if ENABLE_UPSCALING:\n"
+    '    os.environ["ENABLE_UPSCALING"] = "1"\n'
+    "if DISABLE_SAFETY_CHECKER:\n"
+    '    os.environ["DISABLE_SAFETY_CHECKER"] = "1"'
+)
+
 # Pre-fetch every model before the app runs, retrying past the Hub's flaky CDN — but
-# opt-in (RUN_PREFLIGHT defaults to False), not automatic.
+# opt-in (CACHE_MODELS_BEFORE_STARTING defaults to False, set in the Settings section
+# at the top of the notebook), not automatic.
 #
 # Why it exists at all: since 2026-07-13 the Hub's Xet CDN has intermittently rejected
 # its own presigned URLs (403 "Auth failed: SignatureError: invalid key pair id" — see
@@ -494,9 +544,9 @@ APP_PIP_INSTALL = (
 # and every style gets downloaded whether or not this session ever uses it (cache
 # space, bandwidth, minutes), and it replaces the app's own lazy-loading animations
 # (the whole point of a live demo) with a wall of preflight logs before you ever see
-# the UI. Flip RUN_PREFLIGHT to True below and re-run this cell if a Generate click
-# hits repeated download errors — the retry loop and its reasoning are unchanged,
-# just no longer mandatory.
+# the UI. Flip "Cache models before starting" on in the Settings section at the top
+# of the notebook and re-run this cell if a Generate click hits repeated download
+# errors — the retry loop and its reasoning are unchanged, just no longer mandatory.
 #
 # What saves us when it IS needed: the Hub cache RESUMES. A failed attempt still keeps
 # every file it already got, so a retry loop converges even when half the requests
@@ -508,10 +558,11 @@ APP_PIP_INSTALL = (
 # are staged into app_loras/, which pipeline_manager.set_lora already prefers over a
 # repo id — so once this cell has actually run, styles load with no network at all.
 PREFLIGHT_MARKDOWN = (
-    "## 5. Download the models (optional — off by default)\n"
+    "## 6. Download the models (optional — off by default)\n"
     "The app already downloads each model itself the first time you select it, with its "
     "own loading animation, and has a **\"Preload all models\"** button in its Setup tab "
-    "for the same one-shot warm-up this cell does. Leaving `RUN_PREFLIGHT` at `False` "
+    "for the same one-shot warm-up this cell does. Leaving **Cache models before "
+    "starting** off in the Settings section at the top "
     "skips this cell and relies on that — faster to reach the UI, and no cache space "
     "spent on a checkpoint or style this session never uses.\n\n"
     "Turn it on if a Generate click hits repeated download errors. Since "
@@ -577,15 +628,16 @@ _PREFLIGHT_BODY = (
     '    print(f"Fetching {cp.label}...")\n'
     "    fetch_checkpoint(cp)\n"
     "\n"
-    'print("Fetching the upscaler...")\n'
-    "try:\n"
-    "    fetch(\n"
-    '        "Upscaler",\n'
-    '        lambda: DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True),\n'
-    "    )\n"
-    "except Exception:\n"
-    '    print("  Upscaler: no fp16 build, fetching full weights...")\n'
-    '    fetch("Upscaler", lambda: DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True))\n'
+    "if ENABLE_UPSCALING:\n"
+    '    print("Fetching the upscaler...")\n'
+    "    try:\n"
+    "        fetch(\n"
+    '            "Upscaler",\n'
+    '            lambda: DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True),\n'
+    "        )\n"
+    "    except Exception:\n"
+    '        print("  Upscaler: no fp16 build, fetching full weights...")\n'
+    '        fetch("Upscaler", lambda: DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True))\n'
     "\n"
     "os.makedirs(APP_LORAS_DIR, exist_ok=True)\n"
     "for lora in LORAS:\n"
@@ -612,21 +664,18 @@ def _indent(code: str, spaces: int = 4) -> str:
 
 
 # The cell still runs top-to-bottom on a fresh runtime either way (the notebook must,
-# per the brief) — RUN_PREFLIGHT just decides whether its body does anything. A Colab
-# form field (the `# @param` comment), not a plain constant, so switching it on is a
-# checkbox in the rendered cell, not an edit.
+# per the brief) — CACHE_MODELS_BEFORE_STARTING, set as a checkbox in the Settings
+# section at the top of the notebook, just decides whether this body does anything.
 PREFLIGHT = (
-    'RUN_PREFLIGHT = False  # @param {type:"boolean"}\n'
-    "\n"
-    "if RUN_PREFLIGHT:\n"
+    "if CACHE_MODELS_BEFORE_STARTING:\n"
     + _indent(_PREFLIGHT_BODY)
     + "\n"
     "else:\n"
     '    print(\n'
     '        "Skipped — the app downloads each model itself on first use (with its own "\n'
     '        "loading animation), or use its \'Preload all models\' button. Tick "\n'
-    '        "RUN_PREFLIGHT above and re-run this cell if a Generate click hits repeated "\n'
-    '        "download errors."\n'
+    '        "\'Cache models before starting\' in the Settings section at the top and "\n'
+    '        "re-run this cell if a Generate click hits repeated download errors."\n'
     "    )"
 )
 
@@ -817,10 +866,12 @@ def build_app_notebook() -> dict:
             "**Runtime:** switch to a GPU runtime (T4) before running the generation "
             "cells. Building/debugging the interface can be done on a CPU runtime."
         ),
-        markdown_cell("## 1. Install dependencies"),
+        markdown_cell(SETTINGS_MARKDOWN),
+        code_cell(SETTINGS, title="Settings — experimental features"),
+        markdown_cell("## 2. Install dependencies"),
         code_cell(APP_PIP_INSTALL, title="Install dependencies"),
         markdown_cell(
-            "## 2. Hugging Face setup\n"
+            "## 3. Hugging Face setup\n"
             "Everything this app loads is public, so a token is not needed for *access* — "
             "but anonymous Hub requests are **rate-limited**, and this notebook pulls "
             "several GB of checkpoints. A plain **read** token removes the throttle; "
@@ -835,10 +886,10 @@ def build_app_notebook() -> dict:
             "interactive login."
         ),
         code_cell(HF_SETUP, title="Hugging Face login"),
-        markdown_cell("## 3. Imports and Globals"),
+        markdown_cell("## 4. Imports and Globals"),
         code_cell("\n".join(all_imports) + "\n", title="Imports"),
         markdown_cell(
-            "## 4. App modules (reference)\n"
+            "## 5. App modules (reference)\n"
             "One card per file in `src/latent_studio/`, in the order they're defined — run "
             "them all to build the app below. Skip ahead if you're only here to launch it."
         ),
@@ -851,7 +902,7 @@ def build_app_notebook() -> dict:
 
     cells.append(
         markdown_cell(
-            "## 6. Launch the app\nSwitch to a GPU runtime first. `share=True` creates a "
+            "## 7. Launch the app\nSwitch to a GPU runtime first. `share=True` creates a "
             "public link outside this Colab session — the way to reach the app from "
             "another device, e.g. for a live demo. Load the printed link once to "
             "confirm it works before depending on it. `inbrowser=True` only opens a "

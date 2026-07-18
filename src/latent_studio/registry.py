@@ -11,6 +11,16 @@ class Checkpoint:
     repo_id: str
     license: str
     note: str = ""
+    # Recommended starting point for this checkpoint specifically — the app snaps
+    # CFG/Steps to these whenever the Model radio switches to this checkpoint, so a
+    # model that wants a different sweet spot (epiCRealism, notably lower CFG) always
+    # demos at its best setting rather than inheriting whatever was dialed in before.
+    default_cfg: float = 7.5
+    default_steps: int = 30
+    # SD1.5 base degrades badly off its 512x512 training resolution (confirmed in
+    # testing, matches the brief) — portrait/landscape stay locked to checkpoints
+    # that actually handle them, rather than just discouraged.
+    supports_non_square: bool = True
 
 
 @dataclass(frozen=True)
@@ -29,6 +39,7 @@ CHECKPOINTS: list[Checkpoint] = [
         label="Stable Diffusion 1.5",
         repo_id="stable-diffusion-v1-5/stable-diffusion-v1-5",
         license="CreativeML OpenRAIL-M",
+        supports_non_square=False,
     ),
     Checkpoint(
         id="dreamshaper8",
@@ -36,6 +47,9 @@ CHECKPOINTS: list[Checkpoint] = [
         repo_id="Lykon/dreamshaper-8",
         license="CreativeML OpenRAIL-M",
         note="Community SD1.5 checkpoint, stylized/photoreal blend.",
+        # Community guidance (e.g. diffus.me/models/dreamshaper-8) recommends CFG 7-12,
+        # steps 20-30, and works fine at 512x832/768x512 — the shared 7.5/30 default
+        # already sits inside that range, so no override needed (unlike epiCRealism).
     ),
     Checkpoint(
         id="epicrealism",
@@ -43,6 +57,9 @@ CHECKPOINTS: list[Checkpoint] = [
         repo_id="emilianJR/epiCRealism",
         license="CreativeML OpenRAIL-M",
         note="Community SD1.5 checkpoint, photoreal focus.",
+        # Model card recommends CFG ~5 (higher loses realism) and portrait/landscape
+        # over square — https://civitai.com/models/25694/epicrealism.
+        default_cfg=5.0,
     ),
 ]
 

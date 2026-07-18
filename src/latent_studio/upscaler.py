@@ -5,6 +5,7 @@ base SD1.5 pipeline (which starts duplicating anatomy/composition well before
 version-pinning risk). The core app works fully without this module ever loading."""
 
 import gc
+import os
 
 import torch
 from diffusers import StableDiffusionLatentUpscalePipeline
@@ -13,6 +14,13 @@ from PIL import Image
 from .device import empty_cache, get_device, get_dtype
 
 UPSCALER_REPO = "stabilityai/sd-x2-latent-upscaler"
+
+# Opt-in flag, off by default everywhere (locally and in the Colab notebook) — this
+# is still a rough-edged, experimental feature (the button is labelled "(Experimental)"
+# in the UI for the same reason) that needs more tweaking before it's on by default.
+# Set ENABLE_UPSCALING=1 locally, or flip the Colab notebook's top-of-notebook
+# "Activate Upscaling Pipeline (Experimental)" toggle, to turn it on.
+UPSCALING_ENABLED = bool(os.environ.get("ENABLE_UPSCALING"))
 
 
 class UpscalerManager:

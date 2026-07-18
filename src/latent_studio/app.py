@@ -18,6 +18,7 @@ from .callbacks import (
     model_status_html,
     on_advanced_toggle,
     on_button_label_change,
+    on_checkpoint_change,
     on_controlnet_change,
     on_controlnet_toggle,
     on_gallery_select,
@@ -47,6 +48,7 @@ from .design_tokens import (
     DESC_STYLE,
     DESC_STYLE_STRENGTH,
     EXAMPLE_PROMPTS,
+    STATUS_ASPECT_SQUARE_ONLY,
     STATUS_REFERENCE_OFF,
     STATUS_SEED_RANDOM,
     STATUS_STYLE_OFF,
@@ -56,7 +58,7 @@ from .design_tokens import (
 from .icons import ICON_ON_PRIMARY, button_icon
 from .metadata_view import metadata_to_control_values, prompt_used_html, settings_html
 from .progress import status_html
-from .registry import CHECKPOINTS, DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID, LORAS
+from .registry import CHECKPOINTS, DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID, LORAS, get_checkpoint
 
 
 def _title(text: str) -> gr.Markdown:
@@ -112,6 +114,7 @@ def build_app() -> gr.Blocks:
     checkpoint_choices = [(cp.label, cp.id) for cp in CHECKPOINTS]
     lora_choices = [(lora.label, lora.id) for lora in LORAS]
     compare_choices = [("Nothing", "off")] + SWEEP_CHOICES
+    default_checkpoint = get_checkpoint(DEFAULT_CHECKPOINT_ID)
 
     with gr.Blocks(title="Latent Studio") as demo:
         history_state = gr.State([])
@@ -152,7 +155,9 @@ def build_app() -> gr.Blocks:
                 )
                 _heading("Shape", DESC_ASPECT)
                 aspect_radio = gr.Radio(
-                    choices=ASPECT_RATIOS, value=DEFAULT_ASPECT_ID, container=False, info="",
+                    choices=ASPECT_RATIOS, value=DEFAULT_ASPECT_ID, container=False,
+                    interactive=default_checkpoint.supports_non_square,
+                    info=STATUS_ASPECT_SQUARE_ONLY if not default_checkpoint.supports_non_square else "",
                 )
                 generate_button = gr.Button(
                     generate_button_label(DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID),
@@ -197,7 +202,7 @@ def build_app() -> gr.Blocks:
                     )
                     export_button = gr.DownloadButton("Export", size="sm", icon=button_icon("download"))
                 upscale_button = gr.Button(
-                    "Upscale", size="sm", icon=button_icon("expand"), visible=False
+                    "Upscale (Experimental)", size="sm", icon=button_icon("expand"), visible=False
                 )
                 download_image_button = gr.DownloadButton(
                     "Download image", size="sm", icon=button_icon("download"), visible=False
@@ -223,7 +228,7 @@ def build_app() -> gr.Blocks:
                         )
                         _heading("Style strength", DESC_STYLE_STRENGTH)
                         lora_weight_slider = gr.Slider(
-                            minimum=0.0, maximum=1.5, step=0.05, value=1.0, container=False,
+                            minimum=0.0, maximum=1.5, step=0.1, value=1.0, container=False,
                             info=STATUS_STYLE_OFF, interactive=False,
                         )
 
@@ -232,11 +237,13 @@ def build_app() -> gr.Blocks:
                     with gr.Column():
                         _heading("Prompt strength", DESC_CFG)
                         cfg_slider = gr.Slider(
-                            minimum=1.0, maximum=20.0, step=0.05, value=7.5, container=False, info="",
+                            minimum=1.0, maximum=20.0, step=0.1,
+                            value=default_checkpoint.default_cfg, container=False, info="",
                         )
                         _heading("Detail", DESC_STEPS)
                         steps_slider = gr.Slider(
-                            minimum=1, maximum=100, step=1, value=30, container=False, info="",
+                            minimum=1, maximum=100, step=1,
+                            value=default_checkpoint.default_steps, container=False, info="",
                         )
                     with gr.Column():
                         _heading("Seed", DESC_SEED)
@@ -266,7 +273,7 @@ def build_app() -> gr.Blocks:
                     with gr.Column():
                         _heading("Reference strength", DESC_REFERENCE_SCALE)
                         controlnet_scale = gr.Slider(
-                            0.0, 2.0, value=1.0, step=0.05, container=False,
+                            0.0, 2.0, value=1.0, step=0.1, container=False,
                             info=STATUS_REFERENCE_OFF, interactive=False,
                         )
                 with gr.Row():
@@ -354,6 +361,13 @@ def build_app() -> gr.Blocks:
             trigger.change(
                 on_button_label_change, inputs=label_inputs, outputs=generate_button, show_progress="hidden"
             )
+        # Model switch snaps Shape/Prompt strength/Detail to that checkpoint's own
+        # recommended defaults, and locks Shape to Square for one that can't handle
+        # portrait/landscape (see on_checkpoint_change's docstring).
+        checkpoint_radio.change(
+            on_checkpoint_change, inputs=checkpoint_radio,
+            outputs=[aspect_radio, cfg_slider, steps_slider], show_progress="hidden",
+        )
 
         # field1 is Compare's own on/off switch now — picking a setting re-ranges its
         # own Start/End/Steps. field2 only re-ranges on its own change; a field1 change

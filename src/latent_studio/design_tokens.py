@@ -57,9 +57,11 @@ DESC_ASPECT = (
 )
 DESC_MODEL = (
     "The engine that paints. **Stable Diffusion 1.5** is the plain original, a neutral "
-    "all-rounder. **DreamShaper 8** is a community retrain blending stylized and photoreal "
-    "looks. **epiCRealism** is a community retrain pushed hard toward photorealism. "
-    "Switching reloads the model, which takes a moment."
+    "all-rounder — the only one locked to a square image. **DreamShaper 8** is a community "
+    "retrain blending stylized and photoreal looks. **epiCRealism** is a community retrain "
+    "pushed hard toward photorealism and prefers a lower prompt strength. Switching model "
+    "also resets Shape/Prompt strength/Detail to that checkpoint's own recommended starting "
+    "point, and reloads the model, which takes a moment."
 )
 DESC_STYLE = (
     "An artist's hand laid over the model. Each is a **LoRA** trained for this project on that "
@@ -113,6 +115,9 @@ STATUS_SWEPT = "Being compared right now — set its range in the Compare tab."
 STATUS_STYLE_OFF = "Pick a style first."
 STATUS_SEED_RANDOM = "Switch to a fixed seed to type your own."
 STATUS_REFERENCE_OFF = "Pick a reference type first."
+STATUS_ASPECT_SQUARE_ONLY = (
+    "Stable Diffusion 1.5 only renders reliably at 512×512 — switch models for portrait or landscape."
+)
 
 
 @dataclass(frozen=True)
@@ -135,7 +140,7 @@ class SweepSpec:
 # billions).
 SWEEP_SPECS: dict[str, SweepSpec] = {
     "cfg_scale": SweepSpec(
-        "Prompt strength", 1.0, 20.0, 0.05, 3.0, 15.0, 5, 10,
+        "Prompt strength", 1.0, 20.0, 0.1, 3.0, 15.0, 5, 10,
         "Compares how literally the prompt is taken. Low values drift, high values "
         "get harsh — the useful range to look at is roughly 3 to 15.",
     ),
@@ -145,7 +150,7 @@ SWEEP_SPECS: dict[str, SweepSpec] = {
         "low end: the difference between 10 and 30 is large, between 50 and 100 tiny.",
     ),
     "lora_weight": SweepSpec(
-        "Style strength", 0.0, 1.5, 0.05, 0.0, 1.0, 5, 10,
+        "Style strength", 0.0, 1.5, 0.1, 0.0, 1.0, 5, 10,
         "Compares how hard the style is pushed. Sweep 0 → 1 to see it take hold, or "
         "past 1.2 to find the point where it burns.",
     ),
