@@ -113,6 +113,10 @@ def settings_rows(metadata) -> list[tuple[str, str]]:
     upscale = first.get("upscale")
     if upscale:
         rows.append(("Upscaled to", f"{upscale['width']} × {upscale['height']} ({upscale['scale']}x)"))
+        if "steps" in upscale:
+            rows.append(("Upscale detail", str(upscale["steps"])))
+        if "cfg_scale" in upscale:
+            rows.append(("Upscale prompt strength", str(upscale["cfg_scale"])))
     if first.get("controlnet_types"):
         rows.append(("Reference", ", ".join(first["controlnet_types"])))
         rows.append(("Reference strength", str(first.get("controlnet_scales", {}))))
@@ -197,6 +201,15 @@ def metadata_to_control_values(metadata) -> tuple:
         if field1 != "off" and field1 not in SWEEP_SPECS:
             field1 = "off"
         if field2 != "off" and field2 not in SWEEP_SPECS:
+            field2 = "off"
+        # "Reference strength" is only ever in the Compare radios' live choices while
+        # Reference image is actually active (see callbacks.on_reference_active_change)
+        # — a state this restore has no way to guarantee, since it isn't itself part
+        # of the metadata. Reset to "off" rather than risk restoring a value the radio
+        # doesn't currently offer, which Gradio would reject outright.
+        if field1 == "controlnet_scale":
+            field1 = "off"
+        if field2 == "controlnet_scale":
             field2 = "off"
 
         def _u(value):

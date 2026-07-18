@@ -19,6 +19,7 @@ SWEEPABLE_FIELDS: dict[str, type] = {
     "cfg_scale": float,
     "steps": int,
     "lora_weight": float,
+    "controlnet_scale": float,
 }
 
 # Cell labels are burned into the grid PNG, which ends up in the docs and in the
@@ -28,6 +29,7 @@ FIELD_LABELS: dict[str, str] = {
     "steps": "detail",
     "lora_weight": "style strength",
     "seed": "seed",
+    "controlnet_scale": "reference strength",
 }
 
 

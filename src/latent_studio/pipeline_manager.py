@@ -13,12 +13,14 @@ from huggingface_hub import hf_hub_download
 
 from .device import empty_cache, get_device, get_dtype
 from .registry import CHECKPOINTS, LORAS, get_checkpoint, get_lora
-from .upscaler import UPSCALER_REPO, UPSCALING_ENABLED
+from .upscaler import UPSCALER_REPO
 
 StatusCallback = Callable[[str], None] | None
 
-# Dev-only local escape hatch, never wired into the UI. The deployed app always
-# runs with the safety checker enabled — a brief requirement for the public app.
+# A local-debugging escape hatch — the public-facing app must always run with the
+# safety checker enabled. The Colab notebook exposes a Settings-section toggle for
+# this (off by default, leave it off for a public run); local dev can also just set
+# the env var directly.
 _SAFETY_CHECKER_DISABLED = bool(os.environ.get("DISABLE_SAFETY_CHECKER"))
 
 # Where training/export.py stages locally-trained LoRAs; preferred over the HF
@@ -42,12 +44,11 @@ def preload_models(on_status: StatusCallback = None) -> None:
             StableDiffusionPipeline.download(cp.repo_id, variant="fp16", use_safetensors=True)
         except Exception:
             StableDiffusionPipeline.download(cp.repo_id, use_safetensors=True)
-    if UPSCALING_ENABLED:
-        on_status("Fetching the upscaler…")
-        try:
-            DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True)
-        except Exception:
-            DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True)
+    on_status("Fetching the upscaler…")
+    try:
+        DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True)
+    except Exception:
+        DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True)
     os.makedirs(APP_LORAS_DIR, exist_ok=True)
     for lora in LORAS:
         if lora.path is None:

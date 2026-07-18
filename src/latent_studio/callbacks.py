@@ -13,6 +13,8 @@ import gradio as gr
 from .controlnet import ControlNetManager, canny_preprocess, depth_preprocess
 from .design_tokens import (
     ASPECT_SIZES,
+    COMPARE_CHOICES,
+    COMPARE_CHOICES_NO_REFERENCE,
     MAX_IMAGES,
     MAX_SEED,
     MAX_UPSCALE_HOPS,
@@ -42,7 +44,7 @@ from .metadata_view import (
 from .pipeline_manager import PipelineManager, preload_models
 from .progress import ProgressTracker, status_html, track_tqdm
 from .registry import get_checkpoint, get_lora
-from .upscaler import UPSCALER_REPO, UPSCALING_ENABLED, UpscalerManager
+from .upscaler import UPSCALER_REPO, UpscalerManager
 
 manager = PipelineManager()
 controlnet_manager = ControlNetManager()
@@ -237,17 +239,45 @@ def on_randomize_seed():
     return random.randint(0, MAX_SEED)
 
 
-def on_advanced_toggle(enabled: bool):
+def on_visibility_toggle(enabled: bool):
+    """Generic bool -> visible=bool, shared by every tab/panel that has its own
+    dedicated on/off checkbox (Advanced view's Settings panel, the Upscaling tab)."""
     return gr.update(visible=enabled)
 
 
 def on_controlnet_toggle(enabled: bool):
-    """Reference image is Advanced-only — it rides on the same toggle as the Settings
-    panel and shows/hides alongside it. Turning Advanced off also resets the
-    reference-type radio to "off" rather than leaving it selected underneath —
-    turning Advanced back on later should mean picking a reference type again, not
-    silently reactivating whatever was chosen before it was hidden."""
+    """Reference image has its own dedicated toggle (independent of Advanced view and
+    of Upscaling's own toggle) — shows/hides the tab and resets the reference-type
+    radio to "off" rather than leaving it selected underneath, so turning the toggle
+    back on later means picking a reference type again, not silently reactivating
+    whatever was chosen before it was hidden."""
     return gr.update(visible=enabled), gr.update() if enabled else "off"
+
+
+def on_reference_active_change(reference_enabled: bool, controlnet_select: str, field1: str, field2: str):
+    """Reference strength only makes sense as a Compare axis while Reference image is
+    actually active (its own toggle on AND a type picked) — its choices list grows/
+    shrinks with that, and a field currently parked on it resets to "off" the moment
+    Reference mode goes away rather than leaving a now-meaningless axis selected."""
+    active = reference_enabled and controlnet_select != "off"
+    choices = COMPARE_CHOICES if active else COMPARE_CHOICES_NO_REFERENCE
+    field1_value = field1 if active or field1 != "controlnet_scale" else "off"
+    field2_value = field2 if active or field2 != "controlnet_scale" else "off"
+    return gr.update(choices=choices, value=field1_value), gr.update(choices=choices, value=field2_value)
+
+
+def on_upscale_toggle(enabled: bool, history, selected_index):
+    """Upscaling's own toggle now decides the button's visibility, independent of
+    Advanced view — mirrors on_gallery_select's eligibility check (is_grid/hops) so
+    flipping the toggle mid-session immediately reflects whether the currently
+    selected image could actually be upscaled, not just whether the feature exists."""
+    if not history:
+        return gr.update(visible=enabled)
+    metadata = history[selected_index]["metadata"]
+    return gr.update(
+        visible=enabled,
+        interactive=enabled and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS,
+    )
 
 
 def on_controlnet_change(controlnet_select: str):
@@ -365,10 +395,11 @@ def on_generate(
     seed_mode,
     seed,
     lora_weight,
-    advanced_view_on,
+    reference_enabled,
     controlnet_select,
     controlnet_preview,
     controlnet_scale,
+    upscale_enabled,
     field1, from1, to1, count1,
     field2, from2, to2, count2,
     history,
@@ -392,11 +423,11 @@ def on_generate(
     def failed(message):
         return frozen(status_html("alert", message))
 
-    # ControlNet is experimental and Advanced-only — only build a real controlnet_types
-    # list when Advanced view is actually on, regardless of what's selected underneath
-    # (matches on_controlnet_toggle resetting controlnet_select to "off" whenever
-    # Advanced itself goes off).
-    controlnet_types = [controlnet_select] if advanced_view_on and controlnet_select != "off" else []
+    # Reference image has its own toggle now, independent of Advanced view — only
+    # build a real controlnet_types list when it's actually on, regardless of what's
+    # selected underneath (matches on_controlnet_toggle resetting controlnet_select
+    # to "off" whenever the toggle itself goes off).
+    controlnet_types = [controlnet_select] if reference_enabled and controlnet_select != "off" else []
     control_images: dict = {}
     controlnet_scales: dict = {}
     if controlnet_types:
@@ -534,8 +565,8 @@ def on_generate(
         metadata, history,
         gr.update(value=history_to_gallery(history), selected_index=0), 0,
         gr.update(
-            visible=UPSCALING_ENABLED,
-            interactive=UPSCALING_ENABLED and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS,
+            visible=upscale_enabled,
+            interactive=upscale_enabled and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS,
         ),
         gr.update(value=png_path, visible=True), json_path,
         gr.update(interactive=True, value=label()),
@@ -545,12 +576,13 @@ def on_generate(
     )
 
 
-def on_upscale(history, selected_index):
+def on_upscale(history, selected_index, upscale_steps, upscale_cfg):
     """Runs the currently selected single image through the 2x latent upscaler
-    (UpscalerManager) and pushes the result as a new history entry — the original
-    stays untouched. is_grid() is the same guard the button's own `interactive`
-    wiring uses; checked again here since a click shouldn't be trusted to always
-    arrive after the UI has caught up (see on_generate's identical shape)."""
+    (UpscalerManager), at the steps/prompt-strength dialled in on the Upscaling tab,
+    and pushes the result as a new history entry — the original stays untouched.
+    is_grid() is the same guard the button's own `interactive` wiring uses; checked
+    again here since a click shouldn't be trusted to always arrive after the UI has
+    caught up (see on_generate's identical shape)."""
 
     def frozen(state_html):
         return (
@@ -604,7 +636,9 @@ def on_upscale(history, selected_index):
                     tracker.set_phase("Loading the upscaler…", "Loading model…")
                     upscaler_manager.load(on_status=_tracker_status(tracker))
                 tracker.set_phase("Upscaling…", "Upscaling…")
-                outcome["image"] = upscaler_manager.upscale(image, prompt, seed)
+                outcome["image"] = upscaler_manager.upscale(
+                    image, prompt, seed, steps=int(upscale_steps), guidance_scale=upscale_cfg
+                )
         except Exception as exc:  # noqa: BLE001 — every failure belongs in the panel
             outcome["error"] = exc
 
@@ -634,6 +668,7 @@ def on_upscale(history, selected_index):
     new_metadata["upscale"] = {
         "model": UPSCALER_REPO, "scale": 2 ** new_hop, "hop": new_hop,
         "width": upscaled_image.width, "height": upscaled_image.height,
+        "steps": int(upscale_steps), "cfg_scale": upscale_cfg,
     }
     new_entry = {"image": upscaled_image, "metadata": new_metadata, "created_at": time.time()}
     history = [new_entry] + history
@@ -649,7 +684,7 @@ def on_upscale(history, selected_index):
     )
 
 
-def on_gallery_select(evt: gr.SelectData, history):
+def on_gallery_select(evt: gr.SelectData, history, upscale_enabled):
     # Shows the selected thumbnail's prompt/settings and re-points the download
     # buttons — deliberately doesn't touch the live controls ("Reuse" does that).
     entry = history[evt.index]
@@ -657,7 +692,7 @@ def on_gallery_select(evt: gr.SelectData, history):
     metadata = entry["metadata"]
     return (
         metadata, evt.index,
-        gr.update(interactive=UPSCALING_ENABLED and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
+        gr.update(interactive=upscale_enabled and not is_grid(metadata) and upscale_hops(metadata) < MAX_UPSCALE_HOPS),
         gr.update(value=png_path, visible=True), json_path,
         prompt_used_html(metadata), settings_html(metadata),
     )

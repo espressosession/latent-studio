@@ -99,16 +99,40 @@ DESC_REFERENCE_SCALE = (
 )
 DESC_COMPARE = (
     "Generate a grid instead of one image — the fastest way to see what a setting "
-    "actually does, laid out side by side."
+    "actually does, laid out side by side. Reference strength only appears here once "
+    "Reference image is turned on and a type is picked."
 )
+# Functionally corrected for the Reference/Upscaling toggle split below (this control
+# no longer unlocks the Reference image tab, since that now has its own toggle) —
+# still provisional wording, held for the wider copy pass along with everything else
+# flagged in that review.
 DESC_ADVANCED = (
-    "Adds a panel with the full settings of the current image and a button to reuse them, "
-    "and unlocks the experimental Reference image tab."
+    "Adds a panel with the full settings of the current image, a button to reuse them, "
+    "and quick Import/Export of those settings as a file."
 )
 DESC_PRELOAD = (
     "Each model downloads the first time you use it. Pull **all** of them now — handy right "
     "before a live demo, so the first switch isn't a wait. It only fills the cache; nothing is "
     "kept in memory."
+)
+DESC_REFERENCE_TOGGLE = (
+    "Turns on the Reference image tab above, where an uploaded picture's outlines or depth "
+    "can guide the composition. **Experimental** — still being tested."
+)
+DESC_UPSCALE_TOGGLE = (
+    "Turns on the Upscale button next to each image, and the Upscaling tab above where its "
+    "own steps/prompt strength can be tuned. **Experimental** — still being tuned, so treat "
+    "a result as a bonus rather than something to rely on."
+)
+DESC_UPSCALE_CFG = (
+    "Called guidance scale (CFG), same idea as Prompt strength above, but for the upscale "
+    "pass only. 0 keeps the added detail closest to the image as generated; raising it pulls "
+    "that detail further toward the original prompt, at the risk of drifting from the image."
+)
+DESC_UPSCALE_STEPS = (
+    "Called inference steps, same idea as Detail above, but for the upscale pass only. More "
+    "steps can sharpen fine detail while doubling the resolution; past a point it mostly "
+    "costs time for little extra."
 )
 
 STATUS_SWEPT = "Being compared right now — set its range in the Compare tab."
@@ -159,8 +183,19 @@ SWEEP_SPECS: dict[str, SweepSpec] = {
         "Compares different random starting points with everything else held still — "
         "this is what shows you the spread a prompt can produce.",
     ),
+    "controlnet_scale": SweepSpec(
+        "Reference strength", 0.0, 2.0, 0.1, 0.2, 1.5, 5, 10,
+        "Compares how tightly the result sticks to the reference image — from a loose "
+        "suggestion up to tracing its shapes closely and ignoring the prompt.",
+    ),
 }
 SWEEP_CHOICES = [(spec.label, key) for key, spec in SWEEP_SPECS.items()]
+# The Compare tab's two field radios: the full list only makes sense while Reference
+# image is actually active (its own toggle on AND a type picked) — see
+# callbacks.on_reference_active_change, which swaps a radio's choices between these
+# two lists and resets it to "off" if it was parked on the one being removed.
+COMPARE_CHOICES = [("Nothing", "off")] + SWEEP_CHOICES
+COMPARE_CHOICES_NO_REFERENCE = [(label, key) for label, key in COMPARE_CHOICES if key != "controlnet_scale"]
 
 # Colour comes entirely from Gradio's hue system (primary_hue); the .set() below is
 # structural only. Passed to launch(), not the Blocks constructor (Gradio 6 moved it).

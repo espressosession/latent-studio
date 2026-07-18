@@ -51,10 +51,11 @@ APP_MODULE_FILES = [
         "composition well before 1024px. Defined here, ahead of `pipeline_manager.py`, "
         "only because that module's `preload_models()` below references "
         "`UPSCALER_REPO` to warm this model's cache too. **`UPSCALING_ENABLED`** reads "
-        "the `ENABLE_UPSCALING` env var set by the **Settings** section at the very "
-        "top of this notebook (\"Activate Upscaling Pipeline (Experimental)\") — off by "
-        "default everywhere, including local development: it's still rough-edged "
-        "enough that the Upscale button itself is labelled \"(Experimental)\".",
+        "the `ENABLE_UPSCALING` env var (unset by default) only to seed the initial "
+        "value of the app's own **Upscaling** toggle (Advanced tab) — flip that live, "
+        "inside the running app, rather than a notebook setting; no restart needed. "
+        "Off by default everywhere: it's still rough-edged enough that the Upscale "
+        "button itself is labelled \"(Experimental)\".",
     ),
     (
         "registry.py",
@@ -502,26 +503,24 @@ SETTINGS_MARKDOWN = (
     "- **Cache models before starting** — pre-fetches every checkpoint/style now "
     "instead of on first use in the app. Off by default: the app already downloads "
     "lazily with its own loading animation; see the reasoning in section 6.\n"
-    "- **Activate Upscaling Pipeline (Experimental)** — turns on the Advanced-only 2x "
-    "Upscale button (also labelled \"(Experimental)\" in the app itself). Off by "
-    "default everywhere, including local development — it's a newer feature that "
-    "still needs some tweaking.\n"
+    "- **Debug mode** — launches the app with Gradio's own `debug=True`, which keeps "
+    "the launch cell running in the foreground and prints tracebacks straight into "
+    "its output instead of only the runtime logs. Off by default: it's noisier, and "
+    "not needed for a normal run.\n"
     "- **Disable Safety Checker** — a local-debugging escape hatch, nothing more. "
-    "**Leave this off** for the graded/public run — the brief requires the safety "
-    "checker enabled in the public-facing app."
+    "**Leave this off** for the public run — the safety checker must stay enabled in "
+    "the public-facing app."
 )
 SETTINGS = (
     "import os\n"
     "\n"
     'CACHE_MODELS_BEFORE_STARTING = False  # @param {type:"boolean"}\n'
-    'ENABLE_UPSCALING = False  # @param {type:"boolean"}\n'
+    'DEBUG_MODE = False  # @param {type:"boolean"}\n'
     'DISABLE_SAFETY_CHECKER = False  # @param {type:"boolean"}\n'
     "\n"
-    "# Both read as plain env vars further down (pipeline_manager.py / upscaler.py) —\n"
-    "# only set when true, never to a falsy-looking string: os.environ.get(...) is\n"
-    '# truthy for ANY non-empty string, "0" included.\n'
-    "if ENABLE_UPSCALING:\n"
-    '    os.environ["ENABLE_UPSCALING"] = "1"\n'
+    "# Read as a plain env var further down (pipeline_manager.py) — only set when\n"
+    '# true, never to a falsy-looking string: os.environ.get(...) is truthy for ANY\n'
+    '# non-empty string, "0" included.\n'
     "if DISABLE_SAFETY_CHECKER:\n"
     '    os.environ["DISABLE_SAFETY_CHECKER"] = "1"'
 )
@@ -628,16 +627,15 @@ _PREFLIGHT_BODY = (
     '    print(f"Fetching {cp.label}...")\n'
     "    fetch_checkpoint(cp)\n"
     "\n"
-    "if ENABLE_UPSCALING:\n"
-    '    print("Fetching the upscaler...")\n'
-    "    try:\n"
-    "        fetch(\n"
-    '            "Upscaler",\n'
-    '            lambda: DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True),\n'
-    "        )\n"
-    "    except Exception:\n"
-    '        print("  Upscaler: no fp16 build, fetching full weights...")\n'
-    '        fetch("Upscaler", lambda: DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True))\n'
+    'print("Fetching the upscaler...")\n'
+    "try:\n"
+    "    fetch(\n"
+    '        "Upscaler",\n'
+    '        lambda: DiffusionPipeline.download(UPSCALER_REPO, variant="fp16", use_safetensors=True),\n'
+    "    )\n"
+    "except Exception:\n"
+    '    print("  Upscaler: no fp16 build, fetching full weights...")\n'
+    '    fetch("Upscaler", lambda: DiffusionPipeline.download(UPSCALER_REPO, use_safetensors=True))\n'
     "\n"
     "os.makedirs(APP_LORAS_DIR, exist_ok=True)\n"
     "for lora in LORAS:\n"
@@ -855,10 +853,9 @@ def build_app_notebook() -> dict:
     cells = [
         markdown_cell(
             "# Latent Studio — SD 1.5 Image Generator\n\n"
-            "Creative Coding Advanced capstone. Generated from `src/latent_studio/` "
-            "(see `scripts/build_colab_notebook.py`) — flattened into one notebook "
-            "namespace, no separate files or imports between sections, so you can "
-            "read and run it top-to-bottom like a single script.\n\n"
+            "Generated from `src/latent_studio/` (see `scripts/build_colab_notebook.py`) — "
+            "flattened into one notebook namespace, no separate files or imports between "
+            "sections, so you can read and run it top-to-bottom like a single script.\n\n"
             "The six shipped project LoRAs (Hokusai, Turner, Monet, Dürer, Hiroshige, "
             "Rembrandt) are produced by a **separate** notebook, "
             "`lora_training_colab.ipynb`, and loaded here from the Hugging Face Hub "
@@ -909,17 +906,23 @@ def build_app_notebook() -> dict:
             "tab automatically on a **local** runtime — on Google's hosted runtime "
             "(the normal case for the T4 GPU) there's no local browser for it to "
             "reach, so use the printed share link instead; it's a harmless no-op "
-            "either way, not an error."
+            "either way, not an error. `debug=DEBUG_MODE` reads the Settings toggle at "
+            "the top of the notebook (off by default) — turn it on to see Python "
+            "tracebacks printed straight into this cell's output instead of only the "
+            "runtime logs."
         )
     )
     # Gradio 6 takes theme on launch(), not on the Blocks constructor — THEME is a
     # module-level name from the app.py section above. share=True creates a public
     # link reachable outside this Colab session. inline=False: don't embed an
     # iframe in the notebook output (Colab's default) now that a share link exists
-    # to click instead. footer_links=[]: no API/Settings footer.
+    # to click instead. footer_links=[]: no API/Settings footer. debug=DEBUG_MODE is
+    # the Settings-section toggle — off by default.
     cells.append(code_cell(
         "demo = build_app()\n"
-        "demo.launch(share=True, theme=THEME, inline=False, inbrowser=True, footer_links=[])"
+        "demo.launch(\n"
+        "    share=True, theme=THEME, inline=False, inbrowser=True, footer_links=[], debug=DEBUG_MODE\n"
+        ")"
     ))
 
     return notebook(cells)
@@ -932,7 +935,7 @@ def build_training_notebook() -> dict:
         markdown_cell(
             "# Latent Studio — LoRA Training Pipeline\n\n"
             "Automated **artist → downloaded → preprocessed → captioned → trained → "
-            "validated → published LoRA** pipeline for the Latent Studio capstone. "
+            "validated → published LoRA** pipeline for Latent Studio. "
             "Generated from `training/*.py` (see `scripts/build_colab_notebook.py`), "
             "flattened top-to-bottom.\n\n"
             "Produces the project's style LoRAs from public-domain (CC0) Art Institute of "

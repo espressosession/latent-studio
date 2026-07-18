@@ -16,7 +16,6 @@ from .callbacks import (
     gating_updates,
     generate_button_label,
     model_status_html,
-    on_advanced_toggle,
     on_button_label_change,
     on_checkpoint_change,
     on_controlnet_change,
@@ -27,10 +26,14 @@ from .callbacks import (
     on_preload,
     on_preprocess,
     on_randomize_seed,
+    on_reference_active_change,
     on_upscale,
+    on_upscale_toggle,
+    on_visibility_toggle,
 )
 from .design_tokens import (
     ASPECT_RATIOS,
+    COMPARE_CHOICES_NO_REFERENCE,
     CONTROLNET_CHOICES,
     DEFAULT_ASPECT_ID,
     DESC_ADVANCED,
@@ -43,22 +46,26 @@ from .design_tokens import (
     DESC_PROMPT,
     DESC_REFERENCE,
     DESC_REFERENCE_SCALE,
+    DESC_REFERENCE_TOGGLE,
     DESC_SEED,
     DESC_STEPS,
     DESC_STYLE,
     DESC_STYLE_STRENGTH,
+    DESC_UPSCALE_CFG,
+    DESC_UPSCALE_STEPS,
+    DESC_UPSCALE_TOGGLE,
     EXAMPLE_PROMPTS,
     STATUS_ASPECT_SQUARE_ONLY,
     STATUS_REFERENCE_OFF,
     STATUS_SEED_RANDOM,
     STATUS_STYLE_OFF,
-    SWEEP_CHOICES,
     THEME,
 )
 from .icons import ICON_ON_PRIMARY, button_icon
 from .metadata_view import metadata_to_control_values, prompt_used_html, settings_html
 from .progress import status_html
 from .registry import CHECKPOINTS, DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID, LORAS, get_checkpoint
+from .upscaler import UPSCALING_ENABLED
 
 
 def _title(text: str) -> gr.Markdown:
@@ -113,7 +120,6 @@ def _compare_column(heading: str, description: str, choices: list, value: str, s
 def build_app() -> gr.Blocks:
     checkpoint_choices = [(cp.label, cp.id) for cp in CHECKPOINTS]
     lora_choices = [(lora.label, lora.id) for lora in LORAS]
-    compare_choices = [("Nothing", "off")] + SWEEP_CHOICES
     default_checkpoint = get_checkpoint(DEFAULT_CHECKPOINT_ID)
 
     with gr.Blocks(title="Latent Studio") as demo:
@@ -153,12 +159,6 @@ def build_app() -> gr.Blocks:
                     placeholder="e.g. blurry, low quality, text…",
                     lines=2,
                 )
-                _heading("Shape", DESC_ASPECT)
-                aspect_radio = gr.Radio(
-                    choices=ASPECT_RATIOS, value=DEFAULT_ASPECT_ID, container=False,
-                    interactive=default_checkpoint.supports_non_square,
-                    info=STATUS_ASPECT_SQUARE_ONLY if not default_checkpoint.supports_non_square else "",
-                )
                 generate_button = gr.Button(
                     generate_button_label(DEFAULT_CHECKPOINT_ID, DEFAULT_LORA_ID),
                     variant="primary",
@@ -170,7 +170,9 @@ def build_app() -> gr.Blocks:
                     apply_default_css=False, elem_id="state_info",
                 )
 
-            # CENTER — the picture and the prompt that made it.
+            # CENTER — the picture, the prompt that made it, and the two actions that
+            # apply straight to this image (Upscale/Download) — not Advanced-only,
+            # since neither needs the Settings panel to be useful.
             with gr.Column(scale=6):
                 # Gradio's preview image is exactly gallery height minus a fixed 60px
                 # thumbnail strip (measured in the shipped component CSS) — 572 renders
@@ -179,12 +181,21 @@ def build_app() -> gr.Blocks:
                     show_label=False, container=False, preview=True, selected_index=0,
                     columns=8, height=572, object_fit="contain", buttons=[],
                 )
-                prompt_used = gr.HTML(
-                    prompt_used_html(None), container=False, padding=False, apply_default_css=False
-                )
+                with gr.Row(equal_height=True):
+                    with gr.Column(scale=5):
+                        prompt_used = gr.HTML(
+                            prompt_used_html(None), container=False, padding=False, apply_default_css=False
+                        )
+                    with gr.Column(scale=1, min_width=160):
+                        upscale_button = gr.Button(
+                            "Upscale (Experimental)", size="sm", icon=button_icon("expand"), visible=False
+                        )
+                        download_image_button = gr.DownloadButton(
+                            "Download image", size="sm", icon=button_icon("download"), visible=False
+                        )
 
-            # RIGHT — Advanced only: exact settings, the way back to them, and the way to
-            # keep the image itself.
+            # RIGHT — Advanced only: exact settings, the way back to them, and quick
+            # Import/Export of those settings as a file.
             with gr.Column(scale=3, visible=False) as advanced_column:
                 _title("Settings")
                 settings_view = gr.HTML(
@@ -201,12 +212,6 @@ def build_app() -> gr.Blocks:
                         "Import", size="sm", icon=button_icon("upload"), file_types=[".json", ".png"],
                     )
                     export_button = gr.DownloadButton("Export", size="sm", icon=button_icon("download"))
-                upscale_button = gr.Button(
-                    "Upscale (Experimental)", size="sm", icon=button_icon("expand"), visible=False
-                )
-                download_image_button = gr.DownloadButton(
-                    "Download image", size="sm", icon=button_icon("download"), visible=False
-                )
 
         # ---------------- settings ----------------
         with gr.Tabs():
@@ -220,6 +225,12 @@ def build_app() -> gr.Blocks:
                         )
                         model_status = gr.HTML(
                             model_status_html(), container=False, padding=False, apply_default_css=False
+                        )
+                        _heading("Shape", DESC_ASPECT)
+                        aspect_radio = gr.Radio(
+                            choices=ASPECT_RATIOS, value=DEFAULT_ASPECT_ID, container=False,
+                            interactive=default_checkpoint.supports_non_square,
+                            info=STATUS_ASPECT_SQUARE_ONLY if not default_checkpoint.supports_non_square else "",
                         )
                     with gr.Column():
                         _heading("Style", DESC_STYLE)
@@ -259,10 +270,10 @@ def build_app() -> gr.Blocks:
                             "Roll a new seed", size="sm", icon=button_icon("dice"), interactive=False
                         )
 
-            # ControlNet (ADV) is experimental — Advanced view (Setup tab) is the only way
-            # in; the tab itself stays hidden until Advanced is on, and on_generate only
-            # builds a real controlnet_types list in that case. The core generator works
-            # fully with this off, which is the default (Advanced itself defaults off).
+            # ControlNet (ADV) is experimental — its own dedicated toggle (Advanced tab)
+            # is the only way in; the tab itself stays hidden until that toggle is on,
+            # and on_generate only builds a real controlnet_types list in that case. The
+            # core generator works fully with this off, which is the default.
             with gr.Tab("Reference image", visible=False) as reference_tab:
                 with gr.Row():
                     with gr.Column():
@@ -295,6 +306,21 @@ def build_app() -> gr.Blocks:
                     "the style paints it._"
                 )
 
+            # Upscaling (ADV) is experimental — its own dedicated toggle (Advanced tab) is
+            # the only way in, same pattern as Reference image above.
+            with gr.Tab("Upscaling", visible=UPSCALING_ENABLED) as upscaling_tab:
+                with gr.Row():
+                    with gr.Column():
+                        _heading("Prompt strength", DESC_UPSCALE_CFG)
+                        upscale_cfg_slider = gr.Slider(
+                            minimum=0.0, maximum=20.0, step=0.1, value=0.0, container=False, info="",
+                        )
+                    with gr.Column():
+                        _heading("Detail", DESC_UPSCALE_STEPS)
+                        upscale_steps_slider = gr.Slider(
+                            minimum=1, maximum=100, step=1, value=20, container=False, info="",
+                        )
+
             with gr.Tab("Compare"):
                 _heading("Compare settings", DESC_COMPARE)
                 with gr.Row():
@@ -303,23 +329,36 @@ def build_app() -> gr.Blocks:
                             "Compare this",
                             'The setting to walk across the grid, left to right. Leave it on '
                             '"Nothing" for a single image.',
-                            compare_choices, "off", None,
+                            COMPARE_CHOICES_NO_REFERENCE, "off", None,
                         )
                     with gr.Column():
                         field2, from2, to2, count2 = _compare_column(
                             "And this",
                             "Optional — add a second setting to lay it out top to bottom as well, "
                             "turning the row into a full table.",
-                            compare_choices, "off", None, interactive=False,
+                            COMPARE_CHOICES_NO_REFERENCE, "off", None, interactive=False,
                         )
 
-            with gr.Tab("Setup"):
+            with gr.Tab("Advanced"):
                 with gr.Row():
                     with gr.Column():
                         _heading("Advanced view", DESC_ADVANCED)
                         advanced_toggle = gr.Checkbox(
                             label="Show each image's exact settings",
                             value=False, container=False, info="",
+                        )
+                    with gr.Column():
+                        _heading("Reference image", DESC_REFERENCE_TOGGLE)
+                        reference_toggle = gr.Checkbox(
+                            label="Enable Reference image (Experimental)",
+                            value=False, container=False, info="",
+                        )
+                with gr.Row():
+                    with gr.Column():
+                        _heading("Upscaling", DESC_UPSCALE_TOGGLE)
+                        upscale_toggle = gr.Checkbox(
+                            label="Enable Upscaling (Experimental)",
+                            value=UPSCALING_ENABLED, container=False, info="",
                         )
                     with gr.Column():
                         _heading("Preload models", DESC_PRELOAD)
@@ -389,14 +428,29 @@ def build_app() -> gr.Blocks:
         )
 
         advanced_toggle.change(
-            on_advanced_toggle, inputs=advanced_toggle, outputs=advanced_column, show_progress="hidden"
+            on_visibility_toggle, inputs=advanced_toggle, outputs=advanced_column, show_progress="hidden"
         )
-        # Reference image rides on the same switch as the Settings panel — see
-        # on_controlnet_toggle's docstring.
-        advanced_toggle.change(
-            on_controlnet_toggle, inputs=advanced_toggle, outputs=[reference_tab, controlnet_select],
+        # Reference image and Upscaling each have their own dedicated toggle now,
+        # independent of Advanced view and of each other.
+        reference_toggle.change(
+            on_controlnet_toggle, inputs=reference_toggle, outputs=[reference_tab, controlnet_select],
             show_progress="hidden",
         )
+        upscale_toggle.change(
+            on_visibility_toggle, inputs=upscale_toggle, outputs=upscaling_tab, show_progress="hidden"
+        )
+        upscale_toggle.change(
+            on_upscale_toggle, inputs=[upscale_toggle, history_state, selected_index_state],
+            outputs=upscale_button, show_progress="hidden",
+        )
+        # Reference strength only belongs among the Compare choices while Reference
+        # image is actually active (its own toggle on AND a type picked) — see
+        # on_reference_active_change's docstring.
+        for trigger in (reference_toggle, controlnet_select):
+            trigger.change(
+                on_reference_active_change, inputs=[reference_toggle, controlnet_select, field1, field2],
+                outputs=[field1, field2], show_progress="hidden",
+            )
         preload_button.click(
             on_preload, outputs=[preload_button, state_info], show_progress="hidden"
         )  # the button + state panel draw their own progress
@@ -416,7 +470,8 @@ def build_app() -> gr.Blocks:
             inputs=[
                 checkpoint_radio, lora_radio, aspect_radio, prompt_input, negative_prompt_input,
                 cfg_slider, steps_slider, seed_mode, seed_input, lora_weight_slider,
-                advanced_toggle, controlnet_select, controlnet_preview, controlnet_scale,
+                reference_toggle, controlnet_select, controlnet_preview, controlnet_scale,
+                upscale_toggle,
                 field1, from1, to1, count1,
                 field2, from2, to2, count2,
                 history_state,
@@ -430,7 +485,7 @@ def build_app() -> gr.Blocks:
             show_progress="hidden",  # the state panel draws its own bars
         )
         history_gallery.select(
-            on_gallery_select, inputs=history_state,
+            on_gallery_select, inputs=[history_state, upscale_toggle],
             outputs=[
                 metadata_state, selected_index_state, upscale_button, download_image_button, export_button,
                 prompt_used, settings_view,
@@ -438,7 +493,7 @@ def build_app() -> gr.Blocks:
             show_progress="hidden",
         )
         upscale_button.click(
-            on_upscale, inputs=[history_state, selected_index_state],
+            on_upscale, inputs=[history_state, selected_index_state, upscale_steps_slider, upscale_cfg_slider],
             outputs=[
                 metadata_state, history_state, history_gallery, selected_index_state,
                 upscale_button, download_image_button, export_button,

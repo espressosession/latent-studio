@@ -23,6 +23,11 @@ class GenerationParams:
     lora_weight: float = 1.0
     controlnet_types: list[str] = field(default_factory=list)
     controlnet_scales: dict[str, float] = field(default_factory=dict)
+    # Compare's own sweep target for Reference strength: the real per-type scale
+    # lives in controlnet_scales, but that's a dict and dataclasses.replace() needs a
+    # plain scalar field to sweep over (see grids.sweep) — None outside a sweep, so it
+    # never shows up in metadata for an ordinary generation (generate() pops it below).
+    controlnet_scale: float | None = None
 
 
 def _effective_prompt(lora_id: str, prompt: str) -> str:
@@ -83,11 +88,22 @@ def generate(
     control_images: dict[str, Image.Image] | None = None,
 ) -> tuple[Image.Image, dict]:
     metadata = asdict(params)
+    if metadata.get("controlnet_scale") is None:
+        metadata.pop("controlnet_scale", None)  # sweep-only override, never a "real" recorded setting
 
     if params.controlnet_types:
         control_images = control_images or {}
         ordered_images = [control_images[t] for t in params.controlnet_types]
-        ordered_scales = [params.controlnet_scales[t] for t in params.controlnet_types]
+        scale_override = params.controlnet_scale
+        ordered_scales = [
+            scale_override if scale_override is not None else params.controlnet_scales[t]
+            for t in params.controlnet_types
+        ]
+        if scale_override is not None:
+            # Keep the recorded controlnet_scales in sync with what was actually
+            # applied — otherwise a swept cell's metadata would show the unswept
+            # base value, breaking "every image reproducible from its own metadata".
+            metadata["controlnet_scales"] = {t: scale_override for t in params.controlnet_types}
         # LoRA (patches the UNet) and ControlNet (injects residuals) are orthogonal and combine freely.
         lora = get_lora(controlnet_manager.lora_id)
         lora_scale = params.lora_weight if lora.path is not None else None

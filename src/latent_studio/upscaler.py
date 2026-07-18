@@ -15,11 +15,12 @@ from .device import empty_cache, get_device, get_dtype
 
 UPSCALER_REPO = "stabilityai/sd-x2-latent-upscaler"
 
-# Opt-in flag, off by default everywhere (locally and in the Colab notebook) — this
-# is still a rough-edged, experimental feature (the button is labelled "(Experimental)"
-# in the UI for the same reason) that needs more tweaking before it's on by default.
-# Set ENABLE_UPSCALING=1 locally, or flip the Colab notebook's top-of-notebook
-# "Activate Upscaling Pipeline (Experimental)" toggle, to turn it on.
+# Opt-in flag, off by default everywhere — this is still a rough-edged, experimental
+# feature (the button is labelled "(Experimental)" in the UI for the same reason)
+# that needs more tweaking before it's on by default. Only seeds the initial value of
+# the app's own live Upscaling toggle (Advanced tab) — that toggle, not this env var,
+# is the actual on/off switch once the app is running; set ENABLE_UPSCALING=1 before
+# launch only if you want it to start already checked.
 UPSCALING_ENABLED = bool(os.environ.get("ENABLE_UPSCALING"))
 
 
@@ -63,7 +64,9 @@ class UpscalerManager:
             gc.collect()
             empty_cache(self.device)
 
-    def upscale(self, image: Image.Image, prompt: str, seed: int, steps: int = 20) -> Image.Image:
+    def upscale(
+        self, image: Image.Image, prompt: str, seed: int, steps: int = 20, guidance_scale: float = 0.0
+    ) -> Image.Image:
         if self.pipe is None:
             raise RuntimeError("Load the upscaler first.")
         gen_device = self.device if self.device != "mps" else "cpu"  # mps generator support is unreliable
@@ -73,7 +76,7 @@ class UpscalerManager:
                 prompt=prompt,
                 image=image,
                 num_inference_steps=steps,
-                guidance_scale=0,
+                guidance_scale=guidance_scale,
                 generator=generator,
             )
         except RuntimeError as exc:
