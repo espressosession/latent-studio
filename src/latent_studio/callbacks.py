@@ -270,9 +270,11 @@ def on_upscale_toggle(enabled: bool, history, selected_index):
     """Upscaling's own toggle now decides the button's visibility, independent of
     Advanced view — mirrors on_gallery_select's eligibility check (is_grid/hops) so
     flipping the toggle mid-session immediately reflects whether the currently
-    selected image could actually be upscaled, not just whether the feature exists."""
+    selected image could actually be upscaled, not just whether the feature exists.
+    With no image generated yet there's nothing to upscale, so the toggle alone
+    can't make the button appear."""
     if not history:
-        return gr.update(visible=enabled)
+        return gr.update(visible=False)
     metadata = history[selected_index]["metadata"]
     return gr.update(
         visible=enabled,
@@ -576,19 +578,25 @@ def on_generate(
     )
 
 
-def on_upscale(history, selected_index, upscale_steps, upscale_cfg):
+def on_upscale(history, selected_index, upscale_steps, upscale_cfg, generate_label):
     """Runs the currently selected single image through the 2x latent upscaler
     (UpscalerManager), at the steps/prompt-strength dialled in on the Upscaling tab,
     and pushes the result as a new history entry — the original stays untouched.
     is_grid() is the same guard the button's own `interactive` wiring uses; checked
     again here since a click shouldn't be trusted to always arrive after the UI has
-    caught up (see on_generate's identical shape)."""
+    caught up (see on_generate's identical shape). Progress borrows the Generate
+    button (disabled + tracker.button text) exactly like a real generation does —
+    Upscale itself just greys out rather than growing its own "Upscaling…" label
+    that would otherwise never get reset. generate_label is the caller's own
+    current button text, restored verbatim once done rather than recomputed here
+    (on_upscale has none of the checkpoint/LoRA/count inputs that label depends on)."""
 
     def frozen(state_html):
         return (
             gr.update(), history, gr.update(), gr.update(),
             gr.update(interactive=True),
             gr.update(), gr.update(),
+            gr.update(interactive=True, value=generate_label),
             model_status_html(), state_html, gr.update(), gr.update(),
         )
 
@@ -647,8 +655,9 @@ def on_upscale(history, selected_index, upscale_steps, upscale_cfg):
     while worker.is_alive():
         yield (
             gr.update(), history, gr.update(), gr.update(),
-            gr.update(interactive=False, value=tracker.button),
+            gr.update(interactive=False),
             gr.update(), gr.update(),
+            gr.update(interactive=False, value=tracker.button),
             model_status_html(), tracker.html(), gr.update(), gr.update(),
         )
         time.sleep(0.2)
@@ -679,6 +688,7 @@ def on_upscale(history, selected_index, upscale_steps, upscale_cfg):
         gr.update(value=history_to_gallery(history), selected_index=0), 0,
         gr.update(interactive=True),
         gr.update(value=png_path, visible=True), json_path,
+        gr.update(interactive=True, value=generate_label),
         model_status_html(), status_html("check", "Done — upscaled 2x"),
         prompt_used_html(new_metadata), settings_html(new_metadata),
     )

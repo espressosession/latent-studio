@@ -493,10 +493,12 @@ def build_app() -> gr.Blocks:
             show_progress="hidden",
         )
         upscale_button.click(
-            on_upscale, inputs=[history_state, selected_index_state, upscale_steps_slider, upscale_cfg_slider],
+            on_upscale, inputs=[
+                history_state, selected_index_state, upscale_steps_slider, upscale_cfg_slider, generate_button,
+            ],
             outputs=[
                 metadata_state, history_state, history_gallery, selected_index_state,
-                upscale_button, download_image_button, export_button,
+                upscale_button, download_image_button, export_button, generate_button,
                 model_status, state_info, prompt_used, settings_view,
             ],
             show_progress="hidden",  # the state panel draws its own bars
